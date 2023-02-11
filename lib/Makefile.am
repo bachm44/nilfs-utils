@@ -6,7 +6,7 @@ AM_CPPFLAGS = -I$(top_srcdir)/include
 lib_LTLIBRARIES = libnilfs.la libnilfsgc.la
 noinst_LTLIBRARIES = librealpath.la libnilfsfeature.la libparser.la \
 	libmountchk.la libcrc32.la libcleanerexec.la libsegment.la \
-	libcleaner.la
+	libcleaner.la libdedup.la
 
 librealpath_la_SOURCES = realpath.c
 
@@ -21,6 +21,8 @@ libcrc32_la_SOURCES = crc32.c
 libcleanerexec_la_SOURCES = cleaner_exec.c
 
 libsegment_la_SOURCES = segment.c
+
+libdedup_la_SOURCES = dedup.c
 
 libnilfs_CURRENT = 3
 libnilfs_REVISION = 0

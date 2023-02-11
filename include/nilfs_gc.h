@@ -93,4 +93,6 @@ static inline int nilfs_suinfo_reclaimable(const struct nilfs_suinfo *si)
 
 extern void (*nilfs_gc_logger)(int priority, const char *fmt, ...);
 
+void run();
+
 #endif /* NILFS_GC_H */

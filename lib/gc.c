@@ -7,6 +7,9 @@
  *
  * Copyright (C) 2008-2012 Nippon Telegraph and Telephone Corporation.
  */
+#include "nilfs.h"
+#include "nilfs2_api.h"
+#include <sys/syslog.h>
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif	/* HAVE_CONFIG_H */
@@ -903,4 +906,161 @@ int nilfs_segment_is_protected(struct nilfs *nilfs, uint64_t segnum,
 	if (likely(!ret))
 		ret = cnt64_ge(seqnum, protseq);
 	return ret;
+}
+
+/*
+taken from sbin/mkfs.c:825-851
+*/
+
+typedef uint64_t  blocknr_t;
+static void **disk_buffer;
+static unsigned long disk_buffer_size;
+
+#define NILFS_DEF_BLOCKSIZE_BITS	12   /* default blocksize = 2^12
+						bytes */
+#define NILFS_DEF_BLOCKSIZE	        (1 << NILFS_DEF_BLOCKSIZE_BITS)
+static unsigned long blocksize = NILFS_DEF_BLOCKSIZE;
+static void init_disk_buffer(long max_blocks);
+static void destroy_disk_buffer(void);
+static void *map_disk_buffer(blocknr_t blocknr, int clear_flag);
+
+char *progname = "mkfs.nilfs2";
+static void show_version(void)
+{
+	fprintf(stderr, "%s (%s %s)\n", progname, PACKAGE, PACKAGE_VERSION);
+}
+
+static void perr(const char *fmt, ...)
+{
+	va_list args;
+
+	show_version();
+	va_start(args, fmt);
+	vfprintf(stderr, fmt, args);
+	fprintf(stderr, "\n");
+	va_end(args);
+	exit(EXIT_FAILURE);
+}
+
+static void cannot_allocate_memory(void)
+{
+	perr("Error: memory allocation failure");
+}
+
+static void destroy_disk_buffer(void)
+{
+	if (disk_buffer) {
+		void **pb = disk_buffer, **ep = disk_buffer + disk_buffer_size;
+
+		while (pb < ep) {
+			if (*pb)
+				free(*pb);
+			pb++;
+		}
+		free(disk_buffer);
+		disk_buffer = NULL;
+	}
+}
+
+static void init_disk_buffer(long max_blocks)
+{
+	disk_buffer = calloc(max_blocks, sizeof(void *));
+	if (!disk_buffer)
+		cannot_allocate_memory();
+
+	memset(disk_buffer, 0, max_blocks * sizeof(void *));
+	disk_buffer_size = max_blocks;
+
+	atexit(destroy_disk_buffer);
+}
+
+static void *map_disk_buffer(blocknr_t blocknr, int clear_flag)
+{
+	if (blocknr >= disk_buffer_size)
+		perr("Internal error: illegal disk buffer access (blocknr=%llu)",
+		     blocknr);
+
+	if (!disk_buffer[blocknr]) {
+		if (posix_memalign(&disk_buffer[blocknr], blocksize,
+				   blocksize) != 0)
+			cannot_allocate_memory();
+		if (clear_flag)
+			memset(disk_buffer[blocknr], 0, blocksize);
+	}
+	return disk_buffer[blocknr];
+}
+
+struct nilfs* nilfs_open_safe()
+{
+	struct nilfs *nilfs =
+		nilfs_open("/dev/loop0", NULL, NILFS_OPEN_RDWR | NILFS_OPEN_RAW);
+	if (nilfs) {
+		nilfs_gc_logger(LOG_INFO, "nilfs opened");
+	} else {
+		nilfs_gc_logger(LOG_ERR, "error: cannot open fs: %s", strerror(errno));
+		exit(1);
+	}
+
+	return nilfs;
+}
+
+void nilfs_segment_free(struct nilfs_segment *segment)
+{
+	free(segment->addr);
+	free(segment);
+}
+
+void run()
+{
+	struct nilfs* nilfs = nilfs_open_safe();
+	init_disk_buffer(1000000);
+
+	struct nilfs_vector *bdescv = nilfs_vector_create(sizeof(struct nilfs_bdesc));
+	struct nilfs_vector *vdescv = nilfs_vector_create(sizeof(struct nilfs_vdesc));
+
+	if (!bdescv || !vdescv) {
+		nilfs_gc_logger(LOG_ERR, "error: cannot allocate vector: %s", strerror(errno));
+		exit(1);
+	}
+
+	const int nsegments = nilfs_get_nsegments(nilfs);
+
+	struct nilfs_suinfo si;
+
+	for (size_t segment_number = 0; segment_number < nsegments; ++segment_number)
+	{
+		nilfs_gc_logger(LOG_DEBUG, "fetching segment number: %d", segment_number);
+		struct nilfs_segment *segment = malloc(sizeof(struct nilfs_segment));
+
+		if(unlikely(nilfs_get_segment(nilfs, segment_number, segment) < 0)) {
+			nilfs_gc_logger(LOG_ERR, "error: cannot fetch segment");
+			exit(1);
+		}
+
+		if(unlikely(nilfs_get_suinfo(nilfs, segment_number, &si, 1) < 0)) {
+			nilfs_gc_logger(LOG_ERR, "error: cannot fetch suinfo");
+			exit(1);
+		}
+
+		nilfs_acc_blocks_segment(segment, si.sui_nblocks, vdescv, bdescv);
+
+		/*
+		Modify function 'fill_in_checksums' from sbin/mkfs.c:1631
+		to get checksums from suinfo for each data block.
+
+		Then implement content extraction from
+		those blocks.
+		*/
+
+		nilfs_segment_free(segment);
+	}
+
+	if (unlikely(nilfs_get_bdesc(nilfs, bdescv) < 0)) {
+		nilfs_gc_logger(LOG_ERR, "error: cannot read disk block descriptors: %s", strerror(errno));
+		exit(1);
+	}
+
+	nilfs_close(nilfs);
+	nilfs_vector_destroy(bdescv);
+	nilfs_vector_destroy(vdescv);
 }
