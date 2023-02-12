@@ -10,7 +10,7 @@ chcp_SOURCES = chcp.c
 chcp_LDADD = $(LDADD) $(LIB_POSIX_SEM) $(top_builddir)/lib/libparser.la
 
 dedup_SOURCES = dedup.c
-dedup_LDADD = $(LDADD) $(top_builddir)/lib/libdedup.la $(top_builddir)/lib/libnilfsgc.la
+dedup_LDADD = $(LDADD) $(top_builddir)/lib/libdedup.la $(top_builddir)/lib/libnilfsgc.la $(top_builddir)/lib/libperr.la
 
 dumpseg_SOURCES = dumpseg.c
 dumpseg_LDADD = $(LDADD) $(top_builddir)/lib/libsegment.la

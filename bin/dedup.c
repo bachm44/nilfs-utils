@@ -1,4 +1,4 @@
-#include "nilfs_gc.h"
+#include "dedup.h"
 
 int main(int argc, char *argv[])
 {
