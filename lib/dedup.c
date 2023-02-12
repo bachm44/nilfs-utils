@@ -3,6 +3,7 @@
 #include "perr.h"
 #include "util.h"
 #include "vector.h"
+#include "crc32.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -14,6 +15,12 @@
 #include <stdint.h>
 #include <stdarg.h>
 
+#define nilfs_crc32(seed, data, length) crc32_le(seed, data, length)
+
+
+// ===============================================================================
+// logging
+// ===============================================================================
 
 static void default_logger(int priority, const char *fmt, ...)
 {
@@ -27,6 +34,15 @@ static void default_logger(int priority, const char *fmt, ...)
 
 static void (*nilfs_dedup_logger)(int priority, const char *fmt, ...) = default_logger;
 
+// ===============================================================================
+// end of logging
+// ===============================================================================
+
+
+
+// ===============================================================================
+// disk_buffer
+// ===============================================================================
 
 /*
 taken from sbin/mkfs.c:825-851
@@ -87,6 +103,28 @@ static void *map_disk_buffer(blocknr_t blocknr, int clear_flag)
 	return disk_buffer[blocknr];
 }
 
+static void fetch_disk_buffer()
+{
+	const char* restrict device = "nilfs.bin";
+	int fd = open(device, O_RDWR);
+	lseek(fd, 0, SEEK_SET);
+	for (size_t i = 0; i < 512; ++i) {
+		if(read(fd, map_disk_buffer(i, 0), blocksize) < 0) {
+			printf("error: %s\n", strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+	}
+}
+
+// ===============================================================================
+// end of disk_buffer
+// ===============================================================================
+
+
+// ===============================================================================
+// nilfs utils
+// ===============================================================================
+
 static struct nilfs* nilfs_open_safe()
 {
 	struct nilfs *nilfs =
@@ -107,7 +145,16 @@ static void nilfs_segment_free(struct nilfs_segment *segment)
 	free(segment);
 }
 
-static void nilfs_suinfo_print(const struct nilfs_suinfo* si) 
+// ===============================================================================
+// end of nilfs utils
+// ===============================================================================
+
+
+// ===============================================================================
+// debug print functions
+// ===============================================================================
+
+static void print_nilfs_suinfo(const struct nilfs_suinfo* si) 
 {
 	printf("nilfs_suinfo {\n");
 	printf("	nblocks = %d\n", si->sui_nblocks);
@@ -115,7 +162,7 @@ static void nilfs_suinfo_print(const struct nilfs_suinfo* si)
 	printf("}\n\n");
 }
 
-static void nilfs_segment_print(const struct nilfs_segment* segment)
+static void print_nilfs_segment(const struct nilfs_segment* segment)
 {
 	printf("nilfs_segment {\n");
 	printf("	addr = %p,\n", segment->addr);
@@ -132,50 +179,44 @@ static void nilfs_segment_print(const struct nilfs_segment* segment)
 	printf("}\n\n");
 }
 
-static void nilfs_layout_print(const struct nilfs_layout* layout)
+static void print_nilfs_layout(const struct nilfs* nilfs)
 {
+	struct nilfs_layout layout;
+	nilfs_get_layout(nilfs, &layout, sizeof(struct nilfs_layout));
+
 	printf("nilfs_layout {\n");
-	printf("	rev_level = %d\n", layout->rev_level);
-	printf("	minor_rev_level = %d\n", layout->minor_rev_level);
-	printf("	flags = %d\n", layout->flags);
-	printf("	blocksize_bits = %d\n", layout->blocksize_bits);
-	printf("	blocksize = %d\n", layout->blocksize);
-	printf("	devsize = %ld\n", layout->devsize);
-	printf("	crc_seed = %d\n", layout->crc_seed);
-	printf("	pad = %d\n", layout->pad);
-	printf("	nsegments = %ld\n", layout->nsegments);
-	printf("	blocks_per_segment = %d\n", layout->blocks_per_segment);
-	printf("	reserved_segments_ratio = %d\n", layout->reserved_segments_ratio);
-	printf("	first_segment_blkoff = %ld\n", layout->first_segment_blkoff);
-	printf("	feature_compat = %ld\n", layout->feature_compat);
-	printf("	feature_compat_ro = %ld\n", layout->feature_compat_ro);
-	printf("	feature_incompat = %ld\n", layout->feature_incompat);
+	printf("	rev_level = %d\n", layout.rev_level);
+	printf("	minor_rev_level = %d\n", layout.minor_rev_level);
+	printf("	flags = %d\n", layout.flags);
+	printf("	blocksize_bits = %d\n", layout.blocksize_bits);
+	printf("	blocksize = %d\n", layout.blocksize);
+	printf("	devsize = %ld\n", layout.devsize);
+	printf("	crc_seed = %d\n", layout.crc_seed);
+	printf("	pad = %d\n", layout.pad);
+	printf("	nsegments = %ld\n", layout.nsegments);
+	printf("	blocks_per_segment = %d\n", layout.blocks_per_segment);
+	printf("	reserved_segments_ratio = %d\n", layout.reserved_segments_ratio);
+	printf("	first_segment_blkoff = %ld\n", layout.first_segment_blkoff);
+	printf("	feature_compat = %ld\n", layout.feature_compat);
+	printf("	feature_compat_ro = %ld\n", layout.feature_compat_ro);
+	printf("	feature_incompat = %ld\n", layout.feature_incompat);
 	printf("}\n\n");
 }
 
-static void nilfs_sustat_print(const struct nilfs_sustat* sustat)
+static void print_nilfs_sustat(const struct nilfs* nilfs)
 {
+	struct nilfs_sustat sustat;
+
+	nilfs_get_sustat(nilfs, &sustat);
+
 	printf("nilfs_sustat {\n");
-	printf("	ss_nsegs = %lld\n", sustat->ss_nsegs);
-	printf("	ss_ncleansegs = %lld\n", sustat->ss_ncleansegs);
-	printf("	ss_ndirtysegs = %lld\n", sustat->ss_ndirtysegs);
-	printf("	ss_ctime = %lld\n", sustat->ss_ctime);
-	printf("	ss_nongc_ctime = %lld\n", sustat->ss_nongc_ctime);
-	printf("	ss_prot_seq = %lld\n", sustat->ss_prot_seq);
+	printf("	ss_nsegs = %lld\n", sustat.ss_nsegs);
+	printf("	ss_ncleansegs = %lld\n", sustat.ss_ncleansegs);
+	printf("	ss_ndirtysegs = %lld\n", sustat.ss_ndirtysegs);
+	printf("	ss_ctime = %lld\n", sustat.ss_ctime);
+	printf("	ss_nongc_ctime = %lld\n", sustat.ss_nongc_ctime);
+	printf("	ss_prot_seq = %lld\n", sustat.ss_prot_seq);
 	printf("}\n\n");
-}
-
-static void fetch_disk_buffer()
-{
-	const char* restrict device = "nilfs.bin";
-	int fd = open(device, O_RDWR);
-	lseek(fd, 0, SEEK_SET);
-	for (size_t i = 0; i < 512; ++i) {
-		if(read(fd, map_disk_buffer(i, 0), blocksize) < 0) {
-			printf("error: %s\n", strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-	}
 }
 
 static void print_block_content(int blocknr)
@@ -186,25 +227,31 @@ static void print_block_content(int blocknr)
 	printf("\n======================== END BLOCK NUMBER %d ========================\n", blocknr);
 }
 
+static void print_nilfs_info(struct nilfs* nilfs)
+{
+	printf("block_size = %ld\n", nilfs_get_block_size(nilfs));
+	printf("blocks_per_segment = %d\n", nilfs_get_blocks_per_segment(nilfs));
+	printf("reserved_segments_ratio = %d\n", nilfs_get_reserved_segments_ratio(nilfs));
+	printf("\n");
+}
+
+// ===============================================================================
+// end of debug print functions
+// ===============================================================================
+
+
 void run()
 {
 	init_disk_buffer(1000000);
 	fetch_disk_buffer();
 
 	struct nilfs* nilfs = nilfs_open_safe();
-	struct nilfs_layout layout;
-	nilfs_get_layout(nilfs, &layout, sizeof(struct nilfs_layout));
-	nilfs_layout_print(&layout);
 
-	struct nilfs_sustat sustat;
-	nilfs_get_sustat(nilfs, &sustat);
-	nilfs_sustat_print(&sustat);
+	print_nilfs_layout(nilfs);
+	print_nilfs_sustat(nilfs);
+	print_nilfs_info(nilfs);
 
-	printf("block_size = %ld\n", nilfs_get_block_size(nilfs));
-	printf("blocks_per_segment = %d\n", nilfs_get_blocks_per_segment(nilfs));
-	printf("reserved_segments_ratio = %d\n", nilfs_get_reserved_segments_ratio(nilfs));
-
-	 struct nilfs_vector *bdescv =
+	struct nilfs_vector *bdescv =
 		nilfs_vector_create(sizeof(struct nilfs_bdesc));
 	struct nilfs_vector *vdescv = nilfs_vector_create(sizeof(struct nilfs_vdesc));
 
@@ -235,33 +282,23 @@ void run()
 			continue;
 		}
 
-		// nilfs_acc_blocks_segment(segment, si.sui_nblocks, vdescv, bdescv);
-
 		printf("SEGMENT NUMBER: %zu\n",segment_number);
-		nilfs_suinfo_print(&si);
-		nilfs_segment_print(segment);
+		print_nilfs_suinfo(&si);
+		print_nilfs_segment(segment);
 
 		const int block_start = segment->blocknr;
 		const int block_end = block_start + si.sui_nblocks;
 
 		for (int blocknr = block_start; blocknr < block_end; ++blocknr) {
 			print_block_content(blocknr);
+			const void *payload = map_disk_buffer(blocknr, 0);
+			const int crc_seed = 123;
+			const uint32_t crc = nilfs_crc32(crc_seed, payload, blocksize);
+			printf("&&&&& CRC32 = %d &&&&& \n\n", crc);
 		}
-			/*
-		Modify function 'fill_in_checksums' from sbin/mkfs.c:1631
-		to get checksums from suinfo for each data block.
-
-		Then implement content extraction from
-		those blocks.
-		*/
 
 		nilfs_segment_free(segment);
 	}
-
-	// if (unlikely(nilfs_get_bdesc(nilfs, bdescv) < 0)) {
-	// 	nilfs_dedup_logger(LOG_ERR, "error: cannot read disk block descriptors: %s", strerror(errno));
-	// 	exit(1);
-	// }
 
 	nilfs_close(nilfs);
 	nilfs_vector_destroy(bdescv);
