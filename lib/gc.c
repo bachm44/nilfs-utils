@@ -7,9 +7,6 @@
  *
  * Copyright (C) 2008-2012 Nippon Telegraph and Telephone Corporation.
  */
-#include "nilfs.h"
-#include "nilfs2_api.h"
-#include <sys/syslog.h>
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif	/* HAVE_CONFIG_H */
