@@ -158,7 +158,7 @@ struct nilfs_segment {
 	unsigned int adjusted : 1;
 };
 
-int nilfs_get_segment(struct nilfs *nilfs, uint64_t segnum,
+int nilfs_get_segment(const struct nilfs *nilfs, uint64_t segnum,
 		      struct nilfs_segment *segment);
 int nilfs_put_segment(struct nilfs_segment *segment);
 int nilfs_get_segment_seqnum(const struct nilfs *nilfs, uint64_t segnum,

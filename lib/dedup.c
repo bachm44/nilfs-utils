@@ -7,8 +7,10 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <linux/fs.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/syslog.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -267,8 +269,12 @@ struct hashtable {
 	struct bucket **items;
 };
 
+enum hashtable_status {
+	HASHTABLE_COLLISION, HASHTABLE_SUCCESS
+};
+
 struct hashtable *hashtable_create(uint32_t size);
-void hashtable_put(struct hashtable *, uint32_t key, uint32_t value);
+enum hashtable_status hashtable_put(struct hashtable *, uint32_t key, uint32_t value);
 struct hashtable_result *hashtable_get(const struct hashtable *, uint32_t key);
 void hashtable_print(const struct hashtable *);
 
@@ -338,7 +344,7 @@ static bool bucket_contains_key(const struct bucket *bucket, uint32_t key)
 	return bucket && bucket->count > 0 && bucket->items[0]->key == key;
 }
 
-void hashtable_put(struct hashtable *table, uint32_t key, uint32_t value)
+enum hashtable_status hashtable_put(struct hashtable *table, uint32_t key, uint32_t value)
 {
 	assert(table);
 
@@ -358,15 +364,18 @@ void hashtable_put(struct hashtable *table, uint32_t key, uint32_t value)
 
 		(*current)->items[count] = item;
 		(*current)->count++;
-	} else {
-		if (table->count < table->size) {
-			*current = create_bucket_with_item(item);
-			table->count++;
-		} else {
-			fprintf(stderr, "no space left in hashtable\n");
-			exit(EXIT_FAILURE);
-		}
+		return HASHTABLE_COLLISION;
 	}
+
+	if (table->count < table->size) {
+		*current = create_bucket_with_item(item);
+		table->count++;
+	} else {
+		fprintf(stderr, "no space left in hashtable\n");
+		exit(EXIT_FAILURE);
+	}
+
+	return HASHTABLE_SUCCESS;
 }
 
 struct hashtable_result *hashtable_get(const struct hashtable *table,
@@ -487,30 +496,107 @@ void hashtable_free(struct hashtable *table)
 // end of hashtable
 // ===============================================================================
 
-#define BUFFER_SIZE 1000000
+// ===============================================================================
+// single-linked list
+// ===============================================================================
 
-void run(const char* restrict device)
+#ifndef HASHTABLE_H
+#define HASHTABLE_H
+
+#include <stdbool.h>
+#include <stddef.h>
+
+struct list {
+	void *data;
+	size_t data_size;
+	struct list *next;
+};
+
+struct list *list_new(void *data, size_t size);
+void list_add(struct list *head, void *data, size_t size);
+void list_free(struct list *);
+
+#endif
+
+#include <assert.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+
+struct list *list_new(void *data, size_t size)
 {
-	init_disk_buffer(BUFFER_SIZE);
-	fetch_disk_buffer(device);
+	struct list *result = malloc(sizeof(struct list));
 
-	struct nilfs* nilfs = nilfs_open_safe(device);
+	result->data = malloc(size);
+	memcpy(result->data, data, size);
+	result->data_size = size;
+	result->next = NULL;
 
-	print_nilfs_layout(nilfs);
-	print_nilfs_sustat(nilfs);
-	print_nilfs_info(nilfs);
+	return result;
+}
 
-	struct nilfs_vector *bdescv =
-		nilfs_vector_create(sizeof(struct nilfs_bdesc));
-	struct nilfs_vector *vdescv = nilfs_vector_create(sizeof(struct nilfs_vdesc));
-
-	if (!bdescv || !vdescv) {
-		nilfs_dedup_logger(LOG_ERR, "error: cannot allocate vector: %s", strerror(errno));
-		exit(1);
+void list_add(struct list *list, void *data, size_t size)
+{
+	struct list *tmp = list;
+	while (tmp->next) {
+		tmp = tmp->next;
 	}
 
-	const int nsegments = nilfs_get_nsegments(nilfs);
+	tmp->next = list_new(data, size);
+}
 
+void list_free(struct list *list)
+{
+	struct list *temp = NULL;
+	struct list *head = list;
+
+	while (head != NULL) {
+		temp = head;
+		head = head->next;
+		free(temp->data);
+		free(temp);
+	}
+}
+
+// ===============================================================================
+// end of single-linked list
+// ===============================================================================
+
+#define BUFFER_SIZE 1000000
+
+struct to_dedup {
+	size_t segment_number;
+	int blocknr;
+};
+
+uint32_t block_crc(int blocknr)
+{
+	print_block_content(blocknr);
+	const void *payload = map_disk_buffer(blocknr, 0);
+	const int crc_seed = 123;
+	const uint32_t crc = nilfs_crc32(crc_seed, payload, blocksize);
+
+	printf("&&&&& CRC32 = %d &&&&& \n\n", crc);
+
+	return crc;
+}
+
+void print_deduplication_list(struct list* list)
+{
+	struct list* temp = NULL;
+	struct list* head = list;
+
+	while(head != NULL) {
+		temp = head;
+		head = head->next;
+		struct to_dedup* data = temp->data;
+		printf("segment_number = %ld, blocknr = %d\n", data->segment_number, data->blocknr);
+	}
+}
+
+struct hashtable* populate_hashtable_with_block_crc(const struct nilfs* nilfs)
+{
+	const int nsegments = nilfs_get_nsegments(nilfs);
 	struct hashtable *table = hashtable_create(BUFFER_SIZE);
 	if (table == NULL) {
 		nilfs_dedup_logger(LOG_ERR, "error: cannot allocate hashtable: %s", strerror(errno));
@@ -545,23 +631,63 @@ void run(const char* restrict device)
 		const int block_end = block_start + si.sui_nblocks;
 
 		for (int blocknr = block_start; blocknr < block_end; ++blocknr) {
-			print_block_content(blocknr);
-			const void *payload = map_disk_buffer(blocknr, 0);
-			const int crc_seed = 123;
-			const uint32_t crc = nilfs_crc32(crc_seed, payload, blocksize);
+			const uint32_t crc = block_crc(blocknr);
 
-			printf("&&&&& CRC32 = %d &&&&& \n\n", crc);
-
-			hashtable_put(table, crc, blocknr);
+			if (hashtable_put(table, crc, blocknr) == HASHTABLE_COLLISION) {
+				printf("collision detected at block %d\n", blocknr);
+			}
 		}
 
 		nilfs_segment_free(segment);
 	}
 
-	hashtable_print(table);
-	hashtable_free(table);
+	return table;
+}
 
-	nilfs_close(nilfs);
+struct file_dedupe_range* get_dedupe_range(int blocknr)
+{
+	struct nilfs_vector *bdescv =
+		nilfs_vector_create(sizeof(struct nilfs_bdesc));
+	struct nilfs_vector *vdescv = nilfs_vector_create(sizeof(struct nilfs_vdesc));
+
+	if (!bdescv || !vdescv) {
+		nilfs_dedup_logger(LOG_ERR, "error: cannot allocate vector: %s", strerror(errno));
+		exit(1);
+	}
+
 	nilfs_vector_destroy(bdescv);
 	nilfs_vector_destroy(vdescv);
+
+	return NULL;
+}
+
+void deduplicate(const struct hashtable* restrict entries)
+{
+}
+
+int deduplicate_range(struct file_dedupe_range* payload)
+{
+	int fd = 0;
+	return ioctl(fd, FIDEDUPERANGE, payload);
+}
+
+void run(const char* restrict device)
+{
+	init_disk_buffer(BUFFER_SIZE);
+	fetch_disk_buffer(device);
+
+	struct nilfs* nilfs = nilfs_open_safe(device);
+
+	print_nilfs_layout(nilfs);
+	print_nilfs_sustat(nilfs);
+	print_nilfs_info(nilfs);
+
+	const struct hashtable* restrict table = populate_hashtable_with_block_crc(nilfs);
+
+	hashtable_print(table);
+
+	deduplicate(table);
+
+	hashtable_free((struct hashtable*)table);
+	nilfs_close(nilfs);
 }

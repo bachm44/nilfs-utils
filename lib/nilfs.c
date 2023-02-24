@@ -972,7 +972,7 @@ int nilfs_thaw(struct nilfs *nilfs)
  * @segnum: segment number
  * @segment: pointer to a segment object (nilfs_segment struct)
  */
-int nilfs_get_segment(struct nilfs *nilfs, uint64_t segnum,
+int nilfs_get_segment(const struct nilfs *nilfs, uint64_t segnum,
 		      struct nilfs_segment *segment)
 {
 	const struct nilfs_super_block *sb = nilfs->n_sb;
