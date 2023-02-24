@@ -103,10 +103,14 @@ static void *map_disk_buffer(blocknr_t blocknr, int clear_flag)
 	return disk_buffer[blocknr];
 }
 
-static void fetch_disk_buffer()
+static void fetch_disk_buffer(const char* restrict device)
 {
-	const char* restrict device = "nilfs.bin";
-	int fd = open(device, O_RDWR);
+	const int fd = open(device, O_RDWR);
+	if (unlikely(fd < 0)) {
+		printf("error: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+
 	lseek(fd, 0, SEEK_SET);
 	for (size_t i = 0; i < 512; ++i) {
 		if(read(fd, map_disk_buffer(i, 0), blocksize) < 0) {
@@ -125,10 +129,10 @@ static void fetch_disk_buffer()
 // nilfs utils
 // ===============================================================================
 
-static struct nilfs* nilfs_open_safe()
+static struct nilfs* nilfs_open_safe(const char* restrict device)
 {
 	struct nilfs *nilfs =
-		nilfs_open("/dev/loop0", NULL, NILFS_OPEN_RDWR | NILFS_OPEN_RAW);
+		nilfs_open(device, NULL, NILFS_OPEN_RDWR | NILFS_OPEN_RAW);
 	if (nilfs) {
 		nilfs_dedup_logger(LOG_INFO, "nilfs opened");
 	} else {
@@ -485,12 +489,12 @@ void hashtable_free(struct hashtable *table)
 
 #define BUFFER_SIZE 1000000
 
-void run()
+void run(const char* restrict device)
 {
 	init_disk_buffer(BUFFER_SIZE);
-	fetch_disk_buffer();
+	fetch_disk_buffer(device);
 
-	struct nilfs* nilfs = nilfs_open_safe();
+	struct nilfs* nilfs = nilfs_open_safe(device);
 
 	print_nilfs_layout(nilfs);
 	print_nilfs_sustat(nilfs);
