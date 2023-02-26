@@ -79,6 +79,7 @@ struct nilfs *nilfs_open(const char *dev, const char *dir, int flags);
 void nilfs_close(struct nilfs *nilfs);
 
 const char *nilfs_get_dev(const struct nilfs *nilfs);
+const char *nilfs_get_ioc(const struct nilfs *nilfs);
 
 int nilfs_opt_test(const struct nilfs *nilfs, unsigned int index);
 int nilfs_opt_set(struct nilfs *nilfs, unsigned int index);
@@ -158,7 +159,7 @@ struct nilfs_segment {
 	unsigned int adjusted : 1;
 };
 
-int nilfs_get_segment(struct nilfs *nilfs, uint64_t segnum,
+int nilfs_get_segment(const struct nilfs *nilfs, uint64_t segnum,
 		      struct nilfs_segment *segment);
 int nilfs_put_segment(struct nilfs_segment *segment);
 int nilfs_get_segment_seqnum(const struct nilfs *nilfs, uint64_t segnum,

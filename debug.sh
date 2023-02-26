@@ -1,3 +1,3 @@
 #!/bin/bash
 
-sudo libtool --mode=execute gdb bin/dedup
+sudo libtool --mode=execute gdb --args bin/dedup /dev/loop0

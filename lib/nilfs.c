@@ -570,6 +570,15 @@ const char *nilfs_get_dev(const struct nilfs *nilfs)
 }
 
 /**
+ * nilfs_get_ioc - get the name of a mount point
+ * @nilfs: nilfs object
+ */
+const char *nilfs_get_ioc(const struct nilfs *nilfs)
+{
+	return nilfs->n_ioc;
+}
+
+/**
  * nilfs_lock - acquire a lock
  * @nilfs: nilfs object
  * @index: index of the lock to be acquired
@@ -972,7 +981,7 @@ int nilfs_thaw(struct nilfs *nilfs)
  * @segnum: segment number
  * @segment: pointer to a segment object (nilfs_segment struct)
  */
-int nilfs_get_segment(struct nilfs *nilfs, uint64_t segnum,
+int nilfs_get_segment(const struct nilfs *nilfs, uint64_t segnum,
 		      struct nilfs_segment *segment)
 {
 	const struct nilfs_super_block *sb = nilfs->n_sb;
