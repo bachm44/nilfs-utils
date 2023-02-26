@@ -773,7 +773,7 @@ const struct nilfs_vector* extents_for_bucket(const struct bucket* bucket)
 
 		const int fd = file_descriptor_for_block(block);
 
-		if (fd < 0) {
+		if (fd <= 0) {
 			nilfs_vector_delete_element(extents, nilfs_vector_get_size(extents) - 1);
 			continue;
 		}
