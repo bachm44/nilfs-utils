@@ -51,7 +51,7 @@ static inline size_t nilfs_vector_get_size(const struct nilfs_vector *vector)
 	return vector->v_nelems;
 }
 
-static inline void *nilfs_vector_get_element(struct nilfs_vector *vector,
+static inline void *nilfs_vector_get_element(const struct nilfs_vector *vector,
 					     unsigned int index)
 {
 	return (index < vector->v_nelems) ?

@@ -570,6 +570,15 @@ const char *nilfs_get_dev(const struct nilfs *nilfs)
 }
 
 /**
+ * nilfs_get_ioc - get the name of a mount point
+ * @nilfs: nilfs object
+ */
+const char *nilfs_get_ioc(const struct nilfs *nilfs)
+{
+	return nilfs->n_ioc;
+}
+
+/**
  * nilfs_lock - acquire a lock
  * @nilfs: nilfs object
  * @index: index of the lock to be acquired

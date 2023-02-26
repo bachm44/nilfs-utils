@@ -4,7 +4,9 @@
 #include "util.h"
 #include "vector.h"
 #include "crc32.h"
+#include "segment.h"
 
+#include <ftw.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/fs.h>
@@ -17,7 +19,14 @@
 #include <stdint.h>
 #include <stdarg.h>
 
+#undef NDEBUG
+
+#define BUFFER_SIZE 1000000
+#define MAX_FILES 4096
+#define MAX_FILE_DESCRIPTORS 256
+
 #define nilfs_crc32(seed, data, length) crc32_le(seed, data, length)
+
 
 
 // ===============================================================================
@@ -233,7 +242,7 @@ static void print_block_content(int blocknr)
 	printf("\n======================== END BLOCK NUMBER %d ========================\n", blocknr);
 }
 
-static void print_nilfs_info(struct nilfs* nilfs)
+static void print_nilfs_info(const struct nilfs* nilfs)
 {
 	printf("block_size = %ld\n", nilfs_get_block_size(nilfs));
 	printf("blocks_per_segment = %d\n", nilfs_get_blocks_per_segment(nilfs));
@@ -251,11 +260,13 @@ static void print_nilfs_info(struct nilfs* nilfs)
 // hashtable
 // ===============================================================================
 
+#include <stddef.h>
 #include <stdint.h>
 
 struct hashtable_item {
 	uint32_t key;
-	uint32_t value;
+	void *value;
+	size_t size;
 };
 
 struct hashtable_result {
@@ -269,13 +280,13 @@ struct hashtable {
 	struct bucket **items;
 };
 
-enum hashtable_status {
-	HASHTABLE_COLLISION, HASHTABLE_SUCCESS
-};
+enum hashtable_status { HASHTABLE_COLLISION, HASHTABLE_SUCCESS };
 
 struct hashtable *hashtable_create(uint32_t size);
-enum hashtable_status hashtable_put(struct hashtable *, uint32_t key, uint32_t value);
-struct hashtable_result *hashtable_get(const struct hashtable *, uint32_t key);
+enum hashtable_status hashtable_put(struct hashtable *table, uint32_t key,
+				    const void *value, size_t size);
+struct hashtable_result *hashtable_get(const struct hashtable *table,
+				       uint32_t key);
 void hashtable_print(const struct hashtable *);
 
 void hashtable_free(struct hashtable *);
@@ -310,12 +321,20 @@ struct hashtable *hashtable_create(uint32_t size)
 	return table;
 }
 
-static struct hashtable_item *create_item(uint32_t key, uint32_t value)
+static struct hashtable_item *create_item(uint32_t key, const void *value,
+					  size_t size)
 {
 	struct hashtable_item *item = malloc(sizeof(struct hashtable_item));
 
 	item->key = key;
-	item->value = value;
+
+	if (size > 0 && value) {
+		item->value = malloc(size);
+		item->size = size;
+		memcpy(item->value, value, size);
+	} else {
+		item->value = NULL;
+	}
 
 	return item;
 }
@@ -344,13 +363,14 @@ static bool bucket_contains_key(const struct bucket *bucket, uint32_t key)
 	return bucket && bucket->count > 0 && bucket->items[0]->key == key;
 }
 
-enum hashtable_status hashtable_put(struct hashtable *table, uint32_t key, uint32_t value)
+enum hashtable_status hashtable_put(struct hashtable *table, uint32_t key,
+				    const void *value, size_t size)
 {
 	assert(table);
 
 	const uint32_t index = hash(table, key);
 	struct bucket **current = &table->items[index];
-	struct hashtable_item *item = create_item(key, value);
+	struct hashtable_item *item = create_item(key, value, size);
 
 	if (bucket_contains_key(*current, key)) {
 		const int count = (*current)->count;
@@ -378,6 +398,22 @@ enum hashtable_status hashtable_put(struct hashtable *table, uint32_t key, uint3
 	return HASHTABLE_SUCCESS;
 }
 
+uint32_t count_items_in_bucket_with_key(const struct bucket *bucket,
+					uint32_t key)
+{
+	uint32_t count = 0;
+
+	for (uint32_t i = 0; i < bucket->count; ++i) {
+		assert(bucket->items[i]);
+
+		if (bucket->items[i]->key == key) {
+			count++;
+		}
+	}
+
+	return count;
+}
+
 struct hashtable_result *hashtable_get(const struct hashtable *table,
 				       uint32_t key)
 {
@@ -391,15 +427,7 @@ struct hashtable_result *hashtable_get(const struct hashtable *table,
 		return NULL;
 	}
 
-	uint32_t count = 0;
-
-	for (uint32_t i = 0; i < current->count; ++i) {
-		assert(current->items[i]);
-
-		if (current->items[i]->key == key) {
-			count++;
-		}
-	}
+	const uint32_t count = count_items_in_bucket_with_key(current, key);
 
 	if (count == 0) {
 		return NULL;
@@ -410,8 +438,11 @@ struct hashtable_result *hashtable_get(const struct hashtable *table,
 
 	for (uint32_t i = 0; i < count; ++i) {
 		items[i] = malloc(sizeof(struct hashtable_item));
-		items[i] = memcpy(items[i], current->items[i],
-				  sizeof(struct hashtable_item));
+		items[i]->key = key;
+
+		items[i]->value = malloc(current->items[i]->size);
+		memcpy(items[i]->value, current->items[i]->value,
+		       current->items[i]->size);
 	}
 
 	struct hashtable_result *result =
@@ -424,7 +455,7 @@ struct hashtable_result *hashtable_get(const struct hashtable *table,
 
 static void print_item(const struct hashtable_item *item)
 {
-	fprintf(stderr, "KEY: %d, VALUE: %d\n", item->key, item->value);
+	fprintf(stderr, "KEY: %d, PTR: %p\n", item->key, item->value);
 }
 
 static void print_bucket(const struct bucket *bucket)
@@ -437,7 +468,6 @@ static void print_bucket(const struct bucket *bucket)
 
 void hashtable_print(const struct hashtable *table)
 {
-	printf("TABLE_SIZE = %d, TABLE_COUNT = %d\n", table->size, table->count);
 	for (uint32_t i = 0; i < table->size; ++i) {
 		if (table->items[i])
 			print_bucket(table->items[i]);
@@ -446,8 +476,12 @@ void hashtable_print(const struct hashtable *table)
 
 static void free_item(struct hashtable_item *item)
 {
-	if (item)
+	if (item) {
+		if (item->value)
+			free(item->value);
+
 		free(item);
+	}
 }
 
 static void free_bucket(struct bucket *bucket)
@@ -562,13 +596,6 @@ void list_free(struct list *list)
 // end of single-linked list
 // ===============================================================================
 
-#define BUFFER_SIZE 1000000
-
-struct to_dedup {
-	size_t segment_number;
-	int blocknr;
-};
-
 uint32_t block_crc(int blocknr)
 {
 	print_block_content(blocknr);
@@ -581,16 +608,31 @@ uint32_t block_crc(int blocknr)
 	return crc;
 }
 
-void print_deduplication_list(struct list* list)
-{
-	struct list* temp = NULL;
-	struct list* head = list;
+struct block_info {
+	uint64_t blocknr;
+	uint32_t offset;
+	uint32_t index;
+	__le64 bd_offset;
+	__le64 fi_ino;
+};
 
-	while(head != NULL) {
-		temp = head;
-		head = head->next;
-		struct to_dedup* data = temp->data;
-		printf("segment_number = %ld, blocknr = %d\n", data->segment_number, data->blocknr);
+static __le64 block_bd_offset(const struct nilfs_block* blk, const struct nilfs_file* file)
+{
+	union nilfs_binfo *binfo;
+	if (nilfs_file_use_real_blocknr(file)) {
+		if (nilfs_block_is_data(blk)) {
+			return le64_to_cpu(*(__le64 *) blk->binfo);
+		} else {
+			binfo = blk->binfo;
+			return le64_to_cpu(binfo->bi_dat.bi_blkoff);
+		}
+	} else {
+		if (nilfs_block_is_data(blk)) {
+			binfo = blk->binfo;
+			return le64_to_cpu(binfo->bi_v.bi_blkoff);
+		} else {
+			return le64_to_cpu(*(__le64 *)blk->binfo);
+		}
 	}
 }
 
@@ -627,48 +669,257 @@ struct hashtable* populate_hashtable_with_block_crc(const struct nilfs* nilfs)
 		print_nilfs_suinfo(&si);
 		print_nilfs_segment(segment);
 
-		const int block_start = segment->blocknr;
-		const int block_end = block_start + si.sui_nblocks;
+		struct nilfs_psegment psegment;
+		const int block_count = si.sui_nblocks;
 
-		for (int blocknr = block_start; blocknr < block_end; ++blocknr) {
-			const uint32_t crc = block_crc(blocknr);
+		nilfs_psegment_for_each(&psegment, segment, block_count) {
+			struct nilfs_file file;
 
-			if (hashtable_put(table, crc, blocknr) == HASHTABLE_COLLISION) {
-				printf("collision detected at block %d\n", blocknr);
+			nilfs_file_for_each(&file, &psegment) {
+				struct nilfs_block block;
+
+				nilfs_block_for_each(&block, &file) {
+					const uint32_t crc = block_crc(block.blocknr);
+					const struct block_info info = {
+						.blocknr = block.blocknr,
+						.offset = block.offset,
+						.index = block.index,
+						.bd_offset = block_bd_offset(&block, &file),
+						.fi_ino = block.file->finfo->fi_ino
+					};
+					hashtable_put(table, crc, &info, sizeof(struct block_info));
+				}
 			}
 		}
 
 		nilfs_segment_free(segment);
 	}
 
+	assert(table);
 	return table;
 }
 
-struct file_dedupe_range* get_dedupe_range(int blocknr)
-{
-	struct nilfs_vector *bdescv =
-		nilfs_vector_create(sizeof(struct nilfs_bdesc));
-	struct nilfs_vector *vdescv = nilfs_vector_create(sizeof(struct nilfs_vdesc));
+static struct hashtable* inode_filename;
 
-	if (!bdescv || !vdescv) {
-		nilfs_dedup_logger(LOG_ERR, "error: cannot allocate vector: %s", strerror(errno));
-		exit(1);
+int visit_entry(const char *__filename,
+				  const struct stat *__status, int __flag)
+{
+	// process only files
+	if (__flag == FTW_F) {
+		printf("FILENAME: %s, %ld\n", __filename, __status->st_ino);
+		hashtable_put(inode_filename, __status->st_ino, (void*)__filename, sizeof(char) * (strlen(__filename) + 1));
 	}
 
-	nilfs_vector_destroy(bdescv);
-	nilfs_vector_destroy(vdescv);
-
-	return NULL;
+	return 0;
 }
 
-void deduplicate(const struct hashtable* restrict entries)
+void create_inode_filename_mapping(const struct nilfs* restrict nilfs)
 {
+	const char* mountpoint = nilfs_get_ioc(nilfs);
+	inode_filename = hashtable_create(MAX_FILES);
+	ftw(mountpoint, visit_entry, MAX_FILE_DESCRIPTORS);
+
+	printf("INODE_FILENAME: \n");
+	hashtable_print(inode_filename);
 }
 
-int deduplicate_range(struct file_dedupe_range* payload)
+bool bucket_has_multiple_items(const struct bucket* bucket)
 {
-	int fd = 0;
-	return ioctl(fd, FIDEDUPERANGE, payload);
+	return bucket->count > 1;
+}
+
+struct deduplication_payload {
+	int src_fd;
+	const struct file_dedupe_range* dedupe_range;
+};
+
+int file_descriptor_for_block(const struct block_info* info)
+{
+	const struct hashtable_result* entry = hashtable_get(inode_filename, info->fi_ino);
+
+	if (!entry) {
+		printf("cannot find inode with number: %lld\n", info->fi_ino);
+		return -1;
+	}
+
+	assert(entry->count == 1);
+
+	const char* name = entry->items[0]->value;
+
+	const int fd = open(name, O_RDONLY);
+
+	if (fd < 0) {
+		printf("cannot open file '%s': %s\n", name, strerror(errno));
+	}
+
+	hashtable_result_free((struct hashtable_result*) entry);
+
+	return fd;
+}
+
+struct extent_info {
+	__s64 fd;
+	__u64 offset;
+	__u64 length;
+};
+
+const struct nilfs_vector* extents_for_bucket(const struct bucket* bucket)
+{
+	assert(bucket);
+
+	struct nilfs_vector* extents = nilfs_vector_create(sizeof(struct extent_info));
+
+	for (size_t i = 0; i < bucket->count; ++i) {
+		struct extent_info* extent = nilfs_vector_get_new_element(extents);
+		const struct block_info* block = bucket->items[i]->value;
+
+		const int fd = file_descriptor_for_block(block);
+
+		if (fd < 0) {
+			nilfs_vector_delete_element(extents, nilfs_vector_get_size(extents) - 1);
+			continue;
+		}
+
+		extent->fd = fd;
+		extent->offset = block->bd_offset;
+		extent->length = BLOCK_SIZE;
+	}
+
+	return extents;
+}
+
+bool deduplication_payload_for_bucket(const struct bucket* bucket, struct deduplication_payload** out)
+{
+	const struct nilfs_vector* extents = extents_for_bucket(bucket);
+
+	// at least two blocks to deduplicate needed in order to fill
+	// src and destination files in file_dedupe_range
+	if (nilfs_vector_get_size(extents) < 2) {
+		return false;
+	}
+
+	const struct extent_info* src = nilfs_vector_get_element(extents, 0);
+	(*out)->src_fd = src->fd;
+
+	const size_t range_size = sizeof(struct file_dedupe_range) + sizeof(struct file_dedupe_range_info) * (bucket->count - 1);
+	struct file_dedupe_range* range = calloc(1, range_size);
+
+	range->src_offset = src->offset;
+	range->src_length = src->length;
+	range->dest_count = bucket->count - 1;
+
+	for (size_t i = 1; i < nilfs_vector_get_size(extents); ++i) {
+		const struct extent_info* extent = nilfs_vector_get_element(extents, i);
+		range->info[i].dest_fd = extent->fd;
+		range->info[i].dest_offset = extent->offset;
+	}
+
+	(*out)->dedupe_range = range;
+
+	nilfs_vector_destroy((struct nilfs_vector*) extents);
+
+	return true;
+}
+
+int deduplicate_ioctl(const struct deduplication_payload* payload)
+{
+	return ioctl(payload->src_fd, FIDEDUPERANGE, payload->dedupe_range);
+}
+
+void deduplicate_payloads(const struct nilfs_vector* payloads)
+{
+	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
+		const struct deduplication_payload* payload = nilfs_vector_get_element(payloads, i);
+
+		if (deduplicate_ioctl(payload) == -1) {
+			printf("cannot call FIDEDUPERANGE ioctl: %s\n", strerror(errno));
+		}
+	}
+}
+
+void free_fd(int fd)
+{
+	printf("close fd: %d\n", fd);
+	if (close(fd) != 0) {
+		printf("cannot free fd %d: %s\n", fd, strerror(errno));
+	}
+}
+
+void free_payloads(struct nilfs_vector* payloads)
+{
+	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
+		const struct deduplication_payload* payload = nilfs_vector_get_element(payloads, i);
+		free_fd(payload->src_fd);
+
+		const int dest_count = payload->dedupe_range->dest_count;
+		for (size_t j = 0; j < dest_count; ++j) {
+			free_fd(payload->dedupe_range->info[j].dest_fd);
+		}
+
+		free((void*) payload->dedupe_range);
+	}
+
+	nilfs_vector_destroy(payloads);
+}
+
+const struct nilfs_vector* obtain_payloads(const struct hashtable* table)
+{
+	struct nilfs_vector* payloads = nilfs_vector_create(sizeof(struct deduplication_payload));
+
+	for (size_t i = 0; i < table->size; ++i) {
+		const struct bucket* bucket = table->items[i];
+
+		if (bucket && bucket_has_multiple_items(bucket)) {
+			assert(bucket->count < MAX_FILE_DESCRIPTORS);
+
+			struct deduplication_payload* payload = nilfs_vector_get_new_element(payloads);
+
+			if (!deduplication_payload_for_bucket(bucket, &payload)) {
+				printf("cannot prepare payload for blocks with crc: '%d'\n", bucket->items[0]->key);
+				nilfs_vector_delete_element(payloads, nilfs_vector_get_size(payloads) - 1);
+			}
+		}
+	}
+
+	return payloads;
+}
+
+void print_dedupe_range(const struct file_dedupe_range* range)
+{
+	printf("		src_offset = %lld\n", range->src_offset);
+	printf("		src_length = %lld\n", range->src_length);
+	printf("		dest_count = %d\n", range->dest_count);
+}
+
+void print_deduplication_payloads(const struct nilfs_vector* payloads)
+{
+	printf("deduplication_payloads: {\n");
+
+	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
+		printf("struct deduplication_payload {\n");
+		const struct deduplication_payload *payload =
+			nilfs_vector_get_element(payloads, i);
+		printf("	src_fd = %d\n", payload->src_fd);
+		printf("	dedupe_range = {\n");
+		print_dedupe_range(payload->dedupe_range);
+		printf("	}\n");
+	}
+
+	printf("}\n");
+}
+
+void deduplicate(const struct nilfs* restrict nilfs)
+{
+	const struct hashtable* restrict crc_table = populate_hashtable_with_block_crc(nilfs);
+	hashtable_print(crc_table);
+
+	const struct nilfs_vector* deduplication_payloads = obtain_payloads(crc_table);
+	print_deduplication_payloads(deduplication_payloads);
+
+	deduplicate_payloads(deduplication_payloads);
+
+	free_payloads((struct nilfs_vector*) deduplication_payloads);
+	hashtable_free((struct hashtable*) crc_table);
 }
 
 void run(const char* restrict device)
@@ -676,18 +927,14 @@ void run(const char* restrict device)
 	init_disk_buffer(BUFFER_SIZE);
 	fetch_disk_buffer(device);
 
-	struct nilfs* nilfs = nilfs_open_safe(device);
+	struct nilfs* fs = nilfs_open_safe(device);
 
-	print_nilfs_layout(nilfs);
-	print_nilfs_sustat(nilfs);
-	print_nilfs_info(nilfs);
+	print_nilfs_layout(fs);
+	print_nilfs_sustat(fs);
+	print_nilfs_info(fs);
 
-	const struct hashtable* restrict table = populate_hashtable_with_block_crc(nilfs);
+	create_inode_filename_mapping(fs);
+	deduplicate(fs);
 
-	hashtable_print(table);
-
-	deduplicate(table);
-
-	hashtable_free((struct hashtable*)table);
-	nilfs_close(nilfs);
+	nilfs_close(fs);
 }

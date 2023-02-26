@@ -79,6 +79,7 @@ struct nilfs *nilfs_open(const char *dev, const char *dir, int flags);
 void nilfs_close(struct nilfs *nilfs);
 
 const char *nilfs_get_dev(const struct nilfs *nilfs);
+const char *nilfs_get_ioc(const struct nilfs *nilfs);
 
 int nilfs_opt_test(const struct nilfs *nilfs, unsigned int index);
 int nilfs_opt_set(struct nilfs *nilfs, unsigned int index);
