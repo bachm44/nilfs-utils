@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdarg.h>
+#include <math.h>
 
 #undef NDEBUG
 
@@ -681,7 +682,7 @@ struct hashtable* populate_hashtable_with_block_crc(const struct nilfs* nilfs)
 						.index = block.index,
 						.bd_offset = block_bd_offset(&block, &file),
 						.fi_ino = block.file->finfo->fi_ino,
-						.extent_length = block.file->finfo->fi_ndatablk == 1 ? 0 : BLOCK_SIZE
+						.extent_length = BLOCK_SIZE
 					};
 					hashtable_put(table, crc, &info, sizeof(struct block_info));
 				}
@@ -697,7 +698,12 @@ struct hashtable* populate_hashtable_with_block_crc(const struct nilfs* nilfs)
 	return table;
 }
 
-static struct hashtable* inode_filename;
+static struct hashtable* inode_info;
+
+struct inode_info {
+	const char* filename;
+	off_t st_size;
+};
 
 int visit_entry(const char *__filename,
 				  const struct stat *__status, int __flag)
@@ -705,7 +711,8 @@ int visit_entry(const char *__filename,
 	// process only files
 	if (__flag == FTW_F) {
 		printf("FILENAME: %s, %ld\n", __filename, __status->st_ino);
-		hashtable_put(inode_filename, __status->st_ino, (void*)__filename, sizeof(char) * (strlen(__filename) + 1));
+		const struct inode_info info = {.filename = __filename, .st_size = __status->st_size};
+		hashtable_put(inode_info, __status->st_ino, &info, sizeof(struct inode_info));
 	}
 
 	return 0;
@@ -714,11 +721,8 @@ int visit_entry(const char *__filename,
 void create_inode_filename_mapping(const struct nilfs* restrict nilfs)
 {
 	const char* mountpoint = nilfs_get_ioc(nilfs);
-	inode_filename = hashtable_create(MAX_FILES);
+	inode_info = hashtable_create(MAX_FILES);
 	ftw(mountpoint, visit_entry, MAX_FILE_DESCRIPTORS);
-
-	printf("INODE_FILENAME: \n");
-	hashtable_print(inode_filename);
 }
 
 bool bucket_has_multiple_items(const struct bucket* bucket)
@@ -733,7 +737,7 @@ struct deduplication_payload {
 
 int file_descriptor_for_block(const struct block_info* info)
 {
-	const struct hashtable_result* entry = hashtable_get(inode_filename, info->fi_ino);
+	const struct hashtable_result* entry = hashtable_get(inode_info, info->fi_ino);
 
 	if (!entry) {
 		printf("cannot find inode with number: %lld\n", info->fi_ino);
@@ -742,7 +746,8 @@ int file_descriptor_for_block(const struct block_info* info)
 
 	assert(entry->count == 1);
 
-	const char* name = entry->items[0]->value;
+	const struct inode_info* inode = entry->items[0]->value;
+	const char* name = inode->filename;
 
 	const int fd = open(name, O_RDONLY);
 
@@ -753,6 +758,24 @@ int file_descriptor_for_block(const struct block_info* info)
 	hashtable_result_free((struct hashtable_result*) entry);
 
 	return fd;
+}
+
+off_t real_size_for_block(const struct block_info* info)
+{
+	const struct hashtable_result* entry = hashtable_get(inode_info, info->fi_ino);
+
+	if (!entry) {
+		printf("cannot find inode with number: %lld\n", info->fi_ino);
+		return -1;
+	}
+
+	assert(entry->count == 1);
+
+	const struct inode_info* inode = entry->items[0]->value;
+	const off_t size = inode->st_size;
+
+	hashtable_result_free((struct hashtable_result*) entry);
+	return size;
 }
 
 struct extent_info {
@@ -780,8 +803,7 @@ const struct nilfs_vector* extents_for_bucket(const struct bucket* bucket)
 
 		extent->fd = fd;
 		extent->offset = block->bd_offset;
-		assert(block->extent_length == 0);
-		extent->length = block->extent_length;
+		extent->length = fmin((double) real_size_for_block(block), (double) block->extent_length);
 	}
 
 	return extents;
@@ -949,7 +971,7 @@ int run(const char* restrict device)
 
 	create_inode_filename_mapping(fs);
 	deduplicate(fs);
-	hashtable_free(inode_filename);
+	hashtable_free(inode_info);
 
 	nilfs_close(fs);
 
