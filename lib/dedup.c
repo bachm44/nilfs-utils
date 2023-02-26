@@ -641,7 +641,7 @@ int visit_entry(const char *__filename,
 	// process only files
 	if (__flag == FTW_F) {
 		printf("FILENAME: %s, %ld\n", __filename, __status->st_ino);
-		hashtable_put(inode_filename, __status->st_ino, (void*)__filename, sizeof(char) * strlen(__filename));
+		hashtable_put(inode_filename, __status->st_ino, (void*)__filename, sizeof(char) * (strlen(__filename) + 1));
 	}
 
 	return 0;
@@ -670,50 +670,89 @@ struct deduplication_payload {
 int file_descriptor_for_block(const struct block_info* info)
 {
 	const struct hashtable_result* entry = hashtable_get(inode_filename, info->fi_ino);
-	assert(entry);
+
+	if (!entry) {
+		printf("cannot find inode with number: %lld\n", info->fi_ino);
+		return -1;
+	}
+
 	assert(entry->count == 1);
 
 	const char* name = entry->items[0]->value;
 
-	hashtable_result_free((struct hashtable_result*) entry);
 	const int fd = open(name, O_RDONLY);
 
 	if (fd < 0) {
 		printf("cannot open file '%s': %s\n", name, strerror(errno));
-		exit(EXIT_FAILURE);
 	}
+
+	hashtable_result_free((struct hashtable_result*) entry);
 
 	return fd;
 }
 
-void populate_dest_range_info(const struct block_info* block ,struct file_dedupe_range_info* out)
+struct extent_info {
+	__s64 fd;
+	__u64 offset;
+	__u64 length;
+};
+
+const struct nilfs_vector* extents_for_bucket(const struct bucket* bucket)
 {
-	out->dest_fd = file_descriptor_for_block(block);
-	out->dest_offset = block->offset;
+	assert(bucket);
+
+	struct nilfs_vector* extents = nilfs_vector_create(sizeof(struct extent_info));
+
+	for (size_t i = 0; i < bucket->count; ++i) {
+		struct extent_info* extent = nilfs_vector_get_new_element(extents);
+		const struct block_info* block = bucket->items[i]->value;
+
+		const int fd = file_descriptor_for_block(block);
+
+		if (fd < 0) {
+			nilfs_vector_delete_element(extents, nilfs_vector_get_size(extents) - 1);
+			continue;
+		}
+
+		extent->fd = fd;
+		extent->offset = block->bd_offset;
+		extent->length = BLOCK_SIZE;
+	}
+
+	return extents;
 }
 
-const struct file_dedupe_range* dedupe_range_for_bucket(const struct bucket* bucket)
+bool deduplication_payload_for_bucket(const struct bucket* bucket, struct deduplication_payload** out)
 {
+	const struct nilfs_vector* extents = extents_for_bucket(bucket);
+
+	// at least two blocks to deduplicate needed in order to fill
+	// src and destination files in file_dedupe_range
+	if (nilfs_vector_get_size(extents) < 2) {
+		return false;
+	}
+
+	const struct extent_info* src = nilfs_vector_get_element(extents, 0);
+	(*out)->src_fd = src->fd;
+
 	const size_t range_size = sizeof(struct file_dedupe_range) + sizeof(struct file_dedupe_range_info) * (bucket->count - 1);
 	struct file_dedupe_range* range = calloc(1, range_size);
 
-	const struct block_info* first = bucket->items[0]->value;
-	range->src_offset = first->offset;
-	range->src_length = BLOCK_SIZE;
+	range->src_offset = src->offset;
+	range->src_length = src->length;
 	range->dest_count = bucket->count - 1;
-	
-	for (size_t i = 1; i < bucket->count; ++i) {
-		const struct block_info* block = bucket->items[i]->value; 
-		populate_dest_range_info(block, &range->info[i - 1]);
+
+	for (size_t i = 1; i < nilfs_vector_get_size(extents); ++i) {
+		const struct extent_info* extent = nilfs_vector_get_element(extents, i);
+		range->info[i].dest_fd = extent->fd;
+		range->info[i].dest_offset = extent->offset;
 	}
 
-	return range;
-}
+	(*out)->dedupe_range = range;
 
-void deduplication_payload_for_bucket(const struct bucket* bucket, struct deduplication_payload** out)
-{
-	(*out)->src_fd = file_descriptor_for_block(bucket->items[0]->value);
-	(*out)->dedupe_range = dedupe_range_for_bucket(bucket);
+	nilfs_vector_destroy((struct nilfs_vector*) extents);
+
+	return true;
 }
 
 int deduplicate_ioctl(const struct deduplication_payload* payload)
@@ -729,7 +768,9 @@ void deduplicate_payloads(const struct nilfs_vector* payloads)
 void free_fd(int fd)
 {
 	printf("close fd: %d\n", fd);
-	close(fd);
+	if (close(fd) != 0) {
+		printf("cannot free fd %d: %s\n", fd, strerror(errno));
+	}
 }
 
 void free_payloads(struct nilfs_vector* payloads)
@@ -745,6 +786,8 @@ void free_payloads(struct nilfs_vector* payloads)
 
 		free((void*) payload->dedupe_range);
 	}
+
+	nilfs_vector_destroy(payloads);
 }
 
 const struct nilfs_vector* obtain_payloads(const struct hashtable* table)
@@ -758,28 +801,40 @@ const struct nilfs_vector* obtain_payloads(const struct hashtable* table)
 			assert(bucket->count < MAX_FILE_DESCRIPTORS);
 
 			struct deduplication_payload* payload = nilfs_vector_get_new_element(payloads);
-			deduplication_payload_for_bucket(bucket, &payload);
+
+			if (!deduplication_payload_for_bucket(bucket, &payload)) {
+				printf("cannot prepare payload for blocks with crc: '%d'\n", bucket->items[0]->key);
+				nilfs_vector_delete_element(payloads, nilfs_vector_get_size(payloads) - 1);
+			}
 		}
 	}
 
 	return payloads;
 }
 
-// void print_payloads(struct nilfs_vector* payloads)
-// {
-// 	printf("deduplication_payloads: {\n");
+void print_dedupe_range(const struct file_dedupe_range* range)
+{
+	printf("		src_offset = %lld\n", range->src_offset);
+	printf("		src_length = %lld\n", range->src_length);
+	printf("		dest_count = %d\n", range->dest_count);
+}
 
-// 	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
-// 		const struct deduplication_payload *payload =
-// 			nilfs_vector_get_element(payloads, i);
+void print_deduplication_payloads(const struct nilfs_vector* payloads)
+{
+	printf("deduplication_payloads: {\n");
 
-// 		const int dest_count = payload->dedupe_range->dest_count;
-// 		for (size_t j = 0; j < dest_count; ++j) {
-// 		}
-// 	}
+	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
+		printf("struct deduplication_payload {\n");
+		const struct deduplication_payload *payload =
+			nilfs_vector_get_element(payloads, i);
+		printf("	src_fd = %d\n", payload->src_fd);
+		printf("	dedupe_range = {\n");
+		print_dedupe_range(payload->dedupe_range);
+		printf("	}\n");
+	}
 
-// 	printf("}\n");
-// }
+	printf("}\n");
+}
 
 void deduplicate(const struct nilfs* restrict nilfs)
 {
@@ -787,7 +842,7 @@ void deduplicate(const struct nilfs* restrict nilfs)
 	hashtable_print(crc_table);
 
 	const struct nilfs_vector* deduplication_payloads = obtain_payloads(crc_table);
-	// print_payloads(deduplication_payloads);
+	print_deduplication_payloads(deduplication_payloads);
 
 	// deduplicate_payloads(deduplication_payloads);
 
