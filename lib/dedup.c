@@ -762,7 +762,13 @@ int deduplicate_ioctl(const struct deduplication_payload* payload)
 
 void deduplicate_payloads(const struct nilfs_vector* payloads)
 {
+	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
+		const struct deduplication_payload* payload = nilfs_vector_get_element(payloads, i);
 
+		if (deduplicate_ioctl(payload) == -1) {
+			printf("cannot call FIDEDUPERANGE ioctl: %s\n", strerror(errno));
+		}
+	}
 }
 
 void free_fd(int fd)
@@ -844,7 +850,7 @@ void deduplicate(const struct nilfs* restrict nilfs)
 	const struct nilfs_vector* deduplication_payloads = obtain_payloads(crc_table);
 	print_deduplication_payloads(deduplication_payloads);
 
-	// deduplicate_payloads(deduplication_payloads);
+	deduplicate_payloads(deduplication_payloads);
 
 	free_payloads((struct nilfs_vector*) deduplication_payloads);
 	hashtable_free((struct hashtable*) crc_table);
