@@ -608,6 +608,7 @@ struct block_info {
 	uint32_t index;
 	__le64 bd_offset;
 	__le64 fi_ino;
+	__u64 extent_length;
 };
 
 static __le64 block_bd_offset(const struct nilfs_block* blk, const struct nilfs_file* file)
@@ -679,7 +680,8 @@ struct hashtable* populate_hashtable_with_block_crc(const struct nilfs* nilfs)
 						.offset = block.offset,
 						.index = block.index,
 						.bd_offset = block_bd_offset(&block, &file),
-						.fi_ino = block.file->finfo->fi_ino
+						.fi_ino = block.file->finfo->fi_ino,
+						.extent_length = block.file->finfo->fi_ndatablk == 1 ? 0 : BLOCK_SIZE
 					};
 					hashtable_put(table, crc, &info, sizeof(struct block_info));
 				}
@@ -778,7 +780,8 @@ const struct nilfs_vector* extents_for_bucket(const struct bucket* bucket)
 
 		extent->fd = fd;
 		extent->offset = block->bd_offset;
-		extent->length = BLOCK_SIZE;
+		assert(block->extent_length == 0);
+		extent->length = block->extent_length;
 	}
 
 	return extents;
@@ -787,24 +790,25 @@ const struct nilfs_vector* extents_for_bucket(const struct bucket* bucket)
 bool deduplication_payload_for_bucket(const struct bucket* bucket, struct deduplication_payload** out)
 {
 	const struct nilfs_vector* extents = extents_for_bucket(bucket);
+	const size_t extents_size = nilfs_vector_get_size(extents);
 
 	// at least two blocks to deduplicate needed in order to fill
 	// src and destination files in file_dedupe_range
-	if (nilfs_vector_get_size(extents) < 2) {
+	if (extents_size < 2) {
 		return false;
 	}
 
 	const struct extent_info* src = nilfs_vector_get_element(extents, 0);
 	(*out)->src_fd = src->fd;
 
-	const size_t range_size = sizeof(struct file_dedupe_range) + sizeof(struct file_dedupe_range_info) * (bucket->count - 1);
+	const size_t range_size = sizeof(struct file_dedupe_range) + sizeof(struct file_dedupe_range_info) * (extents_size);
 	struct file_dedupe_range* range = calloc(1, range_size);
 
 	range->src_offset = src->offset;
 	range->src_length = src->length;
-	range->dest_count = bucket->count - 1;
+	range->dest_count = extents_size - 1;
 
-	for (size_t i = 1; i < nilfs_vector_get_size(extents); ++i) {
+	for (size_t i = 1; i < extents_size; ++i) {
 		const struct extent_info* extent = nilfs_vector_get_element(extents, i);
 		range->info[i].dest_fd = extent->fd;
 		range->info[i].dest_offset = extent->offset;
