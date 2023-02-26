@@ -801,7 +801,7 @@ bool deduplication_payload_for_bucket(const struct bucket* bucket, struct dedupl
 	const struct extent_info* src = nilfs_vector_get_element(extents, 0);
 	(*out)->src_fd = src->fd;
 
-	const size_t range_size = sizeof(struct file_dedupe_range) + sizeof(struct file_dedupe_range_info) * (extents_size);
+	const size_t range_size = sizeof(struct file_dedupe_range) + sizeof(struct file_dedupe_range_info) * (extents_size - 1);
 	struct file_dedupe_range* range = calloc(1, range_size);
 
 	range->src_offset = src->offset;
@@ -810,8 +810,8 @@ bool deduplication_payload_for_bucket(const struct bucket* bucket, struct dedupl
 
 	for (size_t i = 1; i < extents_size; ++i) {
 		const struct extent_info* extent = nilfs_vector_get_element(extents, i);
-		range->info[i].dest_fd = extent->fd;
-		range->info[i].dest_offset = extent->offset;
+		range->info[i - 1].dest_fd = extent->fd;
+		range->info[i - 1].dest_offset = extent->offset;
 	}
 
 	(*out)->dedupe_range = range;
@@ -884,11 +884,24 @@ const struct nilfs_vector* obtain_payloads(const struct hashtable* table)
 	return payloads;
 }
 
+void print_dedupe_range_info(const struct file_dedupe_range_info info[], int count)
+{
+	for (size_t i = 0; i < count; ++i) {
+		printf("			{\n");
+		printf("				dest_fd = %lld\n", info[i].dest_fd);
+		printf("				dest_offset = %lld\n", info[i].dest_offset);
+		printf("			},\n");
+	}
+}
+
 void print_dedupe_range(const struct file_dedupe_range* range)
 {
 	printf("		src_offset = %lld\n", range->src_offset);
 	printf("		src_length = %lld\n", range->src_length);
 	printf("		dest_count = %d\n", range->dest_count);
+	printf("		info = [\n");
+	print_dedupe_range_info(range->info, range->dest_count);
+	printf("		]\n");
 }
 
 void print_deduplication_payloads(const struct nilfs_vector* payloads)
