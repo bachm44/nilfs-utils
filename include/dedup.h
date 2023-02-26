@@ -1,6 +1,6 @@
 #ifndef NILFS_DEDUP_H
 #define NILFS_DEDUP_H
 
-void run(const char* restrict device);
+int run(const char* restrict device);
 
 #endif

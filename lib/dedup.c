@@ -154,12 +154,6 @@ static struct nilfs* nilfs_open_safe(const char* restrict device)
 	return nilfs;
 }
 
-static void nilfs_segment_free(struct nilfs_segment *segment)
-{
-	free(segment->addr);
-	free(segment);
-}
-
 // ===============================================================================
 // end of nilfs utils
 // ===============================================================================
@@ -649,9 +643,9 @@ struct hashtable* populate_hashtable_with_block_crc(const struct nilfs* nilfs)
 
 	for (size_t segment_number = 0; segment_number < nsegments; ++segment_number)
 	{
-		struct nilfs_segment *segment = malloc(sizeof(struct nilfs_segment));
+		struct nilfs_segment segment;
 
-		if(unlikely(nilfs_get_segment(nilfs, segment_number, segment) < 0)) {
+		if(unlikely(nilfs_get_segment(nilfs, segment_number, &segment) < 0)) {
 			nilfs_dedup_logger(LOG_ERR, "error: cannot fetch segment");
 			exit(EXIT_FAILURE);
 		}
@@ -667,12 +661,12 @@ struct hashtable* populate_hashtable_with_block_crc(const struct nilfs* nilfs)
 
 		printf("SEGMENT NUMBER: %zu\n",segment_number);
 		print_nilfs_suinfo(&si);
-		print_nilfs_segment(segment);
+		print_nilfs_segment(&segment);
 
 		struct nilfs_psegment psegment;
 		const int block_count = si.sui_nblocks;
 
-		nilfs_psegment_for_each(&psegment, segment, block_count) {
+		nilfs_psegment_for_each(&psegment, &segment, block_count) {
 			struct nilfs_file file;
 
 			nilfs_file_for_each(&file, &psegment) {
@@ -692,7 +686,9 @@ struct hashtable* populate_hashtable_with_block_crc(const struct nilfs* nilfs)
 			}
 		}
 
-		nilfs_segment_free(segment);
+		if (unlikely(nilfs_put_segment(&segment))) {
+			printf("failed to release segment\n");
+		}
 	}
 
 	assert(table);
@@ -922,12 +918,13 @@ void deduplicate(const struct nilfs* restrict nilfs)
 	hashtable_free((struct hashtable*) crc_table);
 }
 
-void run(const char* restrict device)
+int run(const char* restrict device)
 {
 	init_disk_buffer(BUFFER_SIZE);
 	fetch_disk_buffer(device);
 
 	struct nilfs* fs = nilfs_open_safe(device);
+	nilfs_opt_set_mmap(fs);
 
 	print_nilfs_layout(fs);
 	print_nilfs_sustat(fs);
@@ -935,6 +932,9 @@ void run(const char* restrict device)
 
 	create_inode_filename_mapping(fs);
 	deduplicate(fs);
+	hashtable_free(inode_filename);
 
 	nilfs_close(fs);
+
+	return EXIT_SUCCESS;
 }

@@ -41,6 +41,5 @@ int main(int argc, char *argv[])
 	parse_options(argc, argv);
 	const char* restrict device = argv[optind];
 
-	run(device);
-	return 0;
+	return run(device);
 }
