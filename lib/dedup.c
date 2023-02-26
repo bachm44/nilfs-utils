@@ -701,8 +701,8 @@ struct hashtable* populate_hashtable_with_block_crc(const struct nilfs* nilfs)
 static struct hashtable* inode_info;
 
 struct inode_info {
-	const char* filename;
 	off_t st_size;
+	char filename[FILENAME_MAX];
 };
 
 int visit_entry(const char *__filename,
@@ -711,7 +711,11 @@ int visit_entry(const char *__filename,
 	// process only files
 	if (__flag == FTW_F) {
 		printf("FILENAME: %s, %ld\n", __filename, __status->st_ino);
-		const struct inode_info info = {.filename = __filename, .st_size = __status->st_size};
+
+		struct inode_info info;
+		info.st_size = __status->st_size;
+		strncpy(info.filename, __filename, strlen(__filename) + 1);
+
 		hashtable_put(inode_info, __status->st_ino, &info, sizeof(struct inode_info));
 	}
 
@@ -750,6 +754,7 @@ int file_descriptor_for_block(const struct block_info* info)
 	const char* name = inode->filename;
 
 	const int fd = open(name, O_RDONLY);
+	printf("opening file '%s' with fd = %d\n", name, fd);
 
 	if (fd < 0) {
 		printf("cannot open file '%s': %s\n", name, strerror(errno));
