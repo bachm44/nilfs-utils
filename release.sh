@@ -12,4 +12,4 @@ RELEASE_SHA512=$(sha512sum $ARTIFACT_FILENAME)
 
 gh release create $RELEASE_NAME $ARTIFACT_FILENAME \
 	--generate-notes \
-	--notes "NILFS_UTILS_VERSION = $RELEASE_NAME\n sha512 $RELEASE_SHA512 $ARTIFACT_FILENAME\n"
+	--notes "NILFS_UTILS_VERSION = $RELEASE_NAME                                                         sha512  $RELEASE_SHA512"
