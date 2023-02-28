@@ -789,6 +789,11 @@ struct extent_info {
 	__u64 length;
 };
 
+int min(int a, int b)
+{
+	return (b < a) ? b : a;
+}
+
 const struct nilfs_vector* extents_for_bucket(const struct bucket* bucket)
 {
 	assert(bucket);
@@ -808,7 +813,7 @@ const struct nilfs_vector* extents_for_bucket(const struct bucket* bucket)
 
 		extent->fd = fd;
 		extent->offset = block->bd_offset;
-		extent->length = fmin((double) real_size_for_block(block), (double) block->extent_length);
+		extent->length = min(real_size_for_block(block), block->extent_length);
 	}
 
 	return extents;
