@@ -1,7 +1,6 @@
 #include "dedup.h"
 #include "config.h"
 
-#include <cstdlib>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
