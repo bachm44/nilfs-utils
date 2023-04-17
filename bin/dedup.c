@@ -1,6 +1,7 @@
 #include "dedup.h"
 #include "config.h"
 
+#include <cstdlib>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -44,6 +45,12 @@ int main(int argc, char *argv[])
 	struct dedup_options options = { .verbose = 0 };
 	parse_options(argc, argv, &options);
 	const char *restrict device = argv[optind];
+
+	if (device[0] == '\0') {
+		fprintf(stderr, "Device should not be empty\n");
+		usage();
+		exit(EXIT_FAILURE);
+	}
 
 	return run(device, &options);
 }

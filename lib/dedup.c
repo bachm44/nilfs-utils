@@ -920,7 +920,10 @@ const struct nilfs_vector *obtain_payloads(const struct hashtable *table)
 		const struct bucket *bucket = table->items[i];
 
 		if (bucket && bucket_has_multiple_items(bucket)) {
-			assert(bucket->count < MAX_FILE_DESCRIPTORS);
+			if (bucket->count < MAX_FILE_DESCRIPTORS)
+				logger(LOG_WARNING,
+				       "bucket count exceeds MAX_FILE_DESCRIPTORS, %d < %d",
+				       bucket->count, MAX_FILE_DESCRIPTORS);
 
 			struct deduplication_payload *payload =
 				nilfs_vector_get_new_element(payloads);
