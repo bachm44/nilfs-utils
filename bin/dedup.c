@@ -45,7 +45,7 @@ int main(int argc, char *argv[])
 	parse_options(argc, argv, &options);
 	const char *restrict device = argv[optind];
 
-	if (device[0] == '\0') {
+	if (!device || device[0] == '\0') {
 		fprintf(stderr, "Device should not be empty\n");
 		usage();
 		exit(EXIT_FAILURE);

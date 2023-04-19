@@ -185,6 +185,8 @@ static void fetch_disk_buffer(const char *restrict device)
 
 static struct nilfs *nilfs_open_safe(const char *restrict device)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	struct nilfs *nilfs =
 		nilfs_open(device, NULL, NILFS_OPEN_RDWR | NILFS_OPEN_RAW);
 	if (nilfs) {
@@ -207,6 +209,8 @@ static struct nilfs *nilfs_open_safe(const char *restrict device)
 
 static void print_nilfs_suinfo(const struct nilfs_suinfo *si)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	logger(LOG_DEBUG, "nilfs_suinfo {");
 	logger(LOG_DEBUG, "	nblocks = %d", si->sui_nblocks);
 	logger(LOG_DEBUG, "	lastmod = %lld", si->sui_lastmod);
@@ -215,6 +219,8 @@ static void print_nilfs_suinfo(const struct nilfs_suinfo *si)
 
 static void print_nilfs_segment(const struct nilfs_segment *segment)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	logger(LOG_DEBUG, "nilfs_segment {");
 	logger(LOG_DEBUG, "	addr = %p,", segment->addr);
 	logger(LOG_DEBUG, "	segsize = %ld,", segment->segsize);
@@ -232,6 +238,8 @@ static void print_nilfs_segment(const struct nilfs_segment *segment)
 
 static void print_nilfs_layout(const struct nilfs *nilfs)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	struct nilfs_layout layout;
 	nilfs_get_layout(nilfs, &layout, sizeof(struct nilfs_layout));
 
@@ -261,6 +269,8 @@ static void print_nilfs_layout(const struct nilfs *nilfs)
 
 static void print_nilfs_sustat(const struct nilfs *nilfs)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	struct nilfs_sustat sustat;
 
 	nilfs_get_sustat(nilfs, &sustat);
@@ -277,6 +287,8 @@ static void print_nilfs_sustat(const struct nilfs *nilfs)
 
 static void print_block_content(int blocknr)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	const void *restrict content = map_disk_buffer(blocknr, 0);
 	logger(LOG_DEBUG,
 	       "======================== BLOCK NUMBER %d ========================",
@@ -290,6 +302,8 @@ static void print_block_content(int blocknr)
 
 static void print_nilfs_info(const struct nilfs *nilfs)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	logger(LOG_DEBUG, "block_size = %ld", nilfs_get_block_size(nilfs));
 	logger(LOG_DEBUG, "blocks_per_segment = %d",
 	       nilfs_get_blocks_per_segment(nilfs));
@@ -578,6 +592,8 @@ void hashtable_free(struct hashtable *table)
 
 uint32_t block_crc(int blocknr)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	if (dedup_options->verbose > 1)
 		print_block_content(blocknr);
 
@@ -602,6 +618,8 @@ struct block_info {
 static __le64 block_bd_offset(const struct nilfs_block *blk,
 			      const struct nilfs_file *file)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	union nilfs_binfo *binfo;
 	if (nilfs_file_use_real_blocknr(file)) {
 		if (nilfs_block_is_data(blk)) {
@@ -622,6 +640,8 @@ static __le64 block_bd_offset(const struct nilfs_block *blk,
 
 struct hashtable *populate_hashtable_with_block_crc(const struct nilfs *nilfs)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	const int nsegments = nilfs_get_nsegments(nilfs);
 	struct hashtable *table = hashtable_create(BUFFER_SIZE);
 	if (table == NULL) {
@@ -706,6 +726,8 @@ struct inode_info {
 
 int visit_entry(const char *__filename, const struct stat *__status, int __flag)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	// process only files
 	if (__flag == FTW_F) {
 		logger(LOG_INFO, "VISITING FILENAME: %s, %ld", __filename,
@@ -724,6 +746,8 @@ int visit_entry(const char *__filename, const struct stat *__status, int __flag)
 
 void create_inode_filename_mapping(const struct nilfs *restrict nilfs)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	const char *mountpoint = nilfs_get_ioc(nilfs);
 	inode_info = hashtable_create(MAX_FILES);
 	ftw(mountpoint, visit_entry, MAX_FILE_DESCRIPTORS);
@@ -731,6 +755,8 @@ void create_inode_filename_mapping(const struct nilfs *restrict nilfs)
 
 bool bucket_has_multiple_items(const struct bucket *bucket)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	return bucket->count > 1;
 }
 
@@ -741,6 +767,8 @@ struct deduplication_payload {
 
 int file_descriptor_for_block(const struct block_info *info)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	const struct hashtable_result *entry =
 		hashtable_get(inode_info, info->fi_ino);
 
@@ -770,6 +798,8 @@ int file_descriptor_for_block(const struct block_info *info)
 
 off_t real_size_for_block(const struct block_info *info)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	const struct hashtable_result *entry =
 		hashtable_get(inode_info, info->fi_ino);
 
@@ -796,11 +826,15 @@ struct extent_info {
 
 int min(int a, int b)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	return (b < a) ? b : a;
 }
 
 const struct nilfs_vector *extents_for_bucket(const struct bucket *bucket)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	assert(bucket);
 
 	struct nilfs_vector *extents =
@@ -831,6 +865,8 @@ const struct nilfs_vector *extents_for_bucket(const struct bucket *bucket)
 bool deduplication_payload_for_bucket(const struct bucket *bucket,
 				      struct deduplication_payload **out)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	const struct nilfs_vector *extents = extents_for_bucket(bucket);
 	const size_t extents_size = nilfs_vector_get_size(extents);
 
@@ -868,11 +904,15 @@ bool deduplication_payload_for_bucket(const struct bucket *bucket,
 
 int deduplicate_ioctl(const struct deduplication_payload *payload)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	return ioctl(payload->src_fd, FIDEDUPERANGE, payload->dedupe_range);
 }
 
 void deduplicate_payloads(const struct nilfs_vector *payloads)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
 		const struct deduplication_payload *payload =
 			nilfs_vector_get_element(payloads, i);
@@ -886,6 +926,8 @@ void deduplicate_payloads(const struct nilfs_vector *payloads)
 
 void free_fd(int fd)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	logger(LOG_INFO, "close fd: %d", fd);
 	if (close(fd) != 0) {
 		logger(LOG_WARNING, "cannot free fd %d: %s", fd,
@@ -895,6 +937,8 @@ void free_fd(int fd)
 
 void free_payloads(struct nilfs_vector *payloads)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
 		const struct deduplication_payload *payload =
 			nilfs_vector_get_element(payloads, i);
@@ -913,6 +957,8 @@ void free_payloads(struct nilfs_vector *payloads)
 
 const struct nilfs_vector *obtain_payloads(const struct hashtable *table)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	struct nilfs_vector *payloads =
 		nilfs_vector_create(sizeof(struct deduplication_payload));
 
@@ -920,9 +966,9 @@ const struct nilfs_vector *obtain_payloads(const struct hashtable *table)
 		const struct bucket *bucket = table->items[i];
 
 		if (bucket && bucket_has_multiple_items(bucket)) {
-			if (bucket->count < MAX_FILE_DESCRIPTORS)
+			if (bucket->count >= MAX_FILE_DESCRIPTORS)
 				logger(LOG_WARNING,
-				       "bucket count exceeds MAX_FILE_DESCRIPTORS, %d < %d",
+				       "bucket count exceeds MAX_FILE_DESCRIPTORS, %d >= %d",
 				       bucket->count, MAX_FILE_DESCRIPTORS);
 
 			struct deduplication_payload *payload =
@@ -946,6 +992,8 @@ const struct nilfs_vector *obtain_payloads(const struct hashtable *table)
 void print_dedupe_range_info(const struct file_dedupe_range_info info[],
 			     int count)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	for (size_t i = 0; i < count; ++i) {
 		logger(LOG_INFO, "			{");
 		logger(LOG_INFO,
@@ -960,6 +1008,8 @@ void print_dedupe_range_info(const struct file_dedupe_range_info info[],
 
 void print_dedupe_range(const struct file_dedupe_range *range)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	logger(LOG_INFO, "		src_offset = %lld", range->src_offset);
 	logger(LOG_INFO, "		src_length = %lld", range->src_length);
 	logger(LOG_INFO, "		dest_count = %d", range->dest_count);
@@ -970,6 +1020,8 @@ void print_dedupe_range(const struct file_dedupe_range *range)
 
 void print_deduplication_payloads(const struct nilfs_vector *payloads)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	logger(LOG_INFO, "deduplication_payloads: {");
 
 	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
@@ -987,6 +1039,8 @@ void print_deduplication_payloads(const struct nilfs_vector *payloads)
 
 void deduplicate(const struct nilfs *restrict nilfs)
 {
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+
 	const struct hashtable *restrict crc_table =
 		populate_hashtable_with_block_crc(nilfs);
 
@@ -1004,6 +1058,8 @@ void deduplicate(const struct nilfs *restrict nilfs)
 int run(const char *restrict device, const struct dedup_options *options)
 {
 	dedup_options = options;
+
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 
 	init_disk_buffer(BUFFER_SIZE);
 	fetch_disk_buffer(device);
