@@ -955,7 +955,7 @@ void free_payloads(struct nilfs_vector *payloads)
 	nilfs_vector_destroy(payloads);
 }
 
-const struct nilfs_vector *obtain_payloads(const struct hashtable *table)
+struct nilfs_vector *obtain_payloads(const struct hashtable *table)
 {
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 
@@ -1041,11 +1041,23 @@ void deduplicate(const struct nilfs *restrict nilfs)
 {
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 
-	const struct hashtable *restrict crc_table =
-		populate_hashtable_with_block_crc(nilfs);
+	struct hashtable *crc_table;
+	struct nilfs_vector *deduplication_payloads;
 
-	const struct nilfs_vector *deduplication_payloads =
-		obtain_payloads(crc_table);
+	while (true) {
+		crc_table = populate_hashtable_with_block_crc(nilfs);
+		deduplication_payloads = obtain_payloads(crc_table);
+
+		if (nilfs_vector_get_size(deduplication_payloads) != 0) {
+			break;
+		}
+
+		logger(LOG_WARNING,
+		       "couldn't obtain deduplication payloads, waiting ...");
+		free_payloads((struct nilfs_vector *)deduplication_payloads);
+		hashtable_free((struct hashtable *)crc_table);
+		sleep(1);
+	}
 
 	print_deduplication_payloads(deduplication_payloads);
 
