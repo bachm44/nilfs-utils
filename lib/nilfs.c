@@ -18,6 +18,7 @@
  *    Ryusuke Konishi <konishi.ryusuke@gmail.com>
  */
 
+#include "nilfs2_api.h"
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif	/* HAVE_CONFIG_H */
@@ -1164,4 +1165,18 @@ nilfs_cno_t nilfs_get_oldest_cno(struct nilfs *nilfs)
 
 	nilfs_get_cpinfo(nilfs, nilfs->n_mincno, NILFS_CHECKPOINT, cpinfo, 1);
 	return nilfs->n_mincno;
+}
+
+/**
+ * nilfs_dedup - deduplicate
+ * @nilfs: nilfs object
+ * @blocks_to_consider: blocks to consider
+ */
+int nilfs_dedup(const struct nilfs *nilfs, __u64 blocks_to_consider)
+{
+	if (unlikely(nilfs->n_iocfd < 0)) {
+		errno = EBADF;
+		return -1;
+	}
+	return ioctl(nilfs->n_iocfd, NILFS_IOCTL_DEDUP, &blocks_to_consider);
 }
