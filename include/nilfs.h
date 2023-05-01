@@ -195,6 +195,6 @@ int nilfs_resize(struct nilfs *nilfs, off_t size);
 int nilfs_set_alloc_range(struct nilfs *nilfs, off_t start, off_t end);
 int nilfs_freeze(struct nilfs *nilfs);
 int nilfs_thaw(struct nilfs *nilfs);
-int nilfs_dedup(const struct nilfs *nilfs, __u64 blocks_to_consider);
+int nilfs_dedup(const struct nilfs *nilfs, const struct nilfs_deduplication_payload *payload);
 
 #endif	/* NILFS_H */

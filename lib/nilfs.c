@@ -21,55 +21,55 @@
 #include "nilfs2_api.h"
 #ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif	/* HAVE_CONFIG_H */
+#endif /* HAVE_CONFIG_H */
 
 #include <stdio.h>
 
 #if HAVE_STDLIB_H
 #include <stdlib.h>
-#endif	/* HAVE_STDLIB_H */
+#endif /* HAVE_STDLIB_H */
 
 #if HAVE_UNISTD_H
 #include <unistd.h>
-#endif	/* HAVE_UNISTD_H */
+#endif /* HAVE_UNISTD_H */
 
 #include <ctype.h>
 
 #if HAVE_SYS_TYPES_H
 #include <sys/types.h>
-#endif	/* HAVE_SYS_TYPES_H */
+#endif /* HAVE_SYS_TYPES_H */
 
 #if HAVE_SYS_STAT_H
 #include <sys/stat.h>
-#endif	/* HAVE_SYS_STAT_H */
+#endif /* HAVE_SYS_STAT_H */
 
 #if HAVE_STRING_H
 #include <string.h>
-#endif	/* HAVE_STRING_H */
+#endif /* HAVE_STRING_H */
 
 #if HAVE_FCNTL_H
 #include <fcntl.h>
-#endif	/* HAVE_FCNTL_H */
+#endif /* HAVE_FCNTL_H */
 
 #if HAVE_LIMITS_H
 #include <limits.h>
-#endif	/* HAVE_LIMITS_H */
+#endif /* HAVE_LIMITS_H */
 
 #if HAVE_SEMAPHORE_H
 #include <semaphore.h>
-#endif	/* HAVE_SEMAPHORE_H */
+#endif /* HAVE_SEMAPHORE_H */
 
 #if HAVE_SYS_MMAN_H
 #include <sys/mman.h>
-#endif	/* HAVE_SYS_MMAN_H */
+#endif /* HAVE_SYS_MMAN_H */
 
 #if HAVE_TIME_H
 #include <time.h>
-#endif	/* HAVE_TIME_H */
+#endif /* HAVE_TIME_H */
 
 #if HAVE_LINUX_TYPES_H
 #include <linux/types.h>
-#endif	/* HAVE_LINUX_TYPES_H */
+#endif /* HAVE_LINUX_TYPES_H */
 
 #include <errno.h>
 #include <assert.h>
@@ -110,7 +110,6 @@ enum {
 	__NR_NILFS_OPT,
 };
 
-
 static inline int iseol(int c)
 {
 	return c == '\n' || c == '\0';
@@ -138,16 +137,16 @@ static size_t tokenize(char *line, char **tokens, size_t ntoks)
 	return n;
 }
 
-#define NMNTFLDS	6
-#define MNTFLD_FS	0
-#define MNTFLD_DIR	1
-#define MNTFLD_TYPE	2
-#define MNTFLD_OPTS	3
-#define MNTFLD_FREQ	4
-#define MNTFLD_PASSNO	5
-#define MNTOPT_RW	"rw"
-#define MNTOPT_RO	"ro"
-#define MNTOPT_SEP	','
+#define NMNTFLDS 6
+#define MNTFLD_FS 0
+#define MNTFLD_DIR 1
+#define MNTFLD_TYPE 2
+#define MNTFLD_OPTS 3
+#define MNTFLD_FREQ 4
+#define MNTFLD_PASSNO 5
+#define MNTOPT_RW "rw"
+#define MNTOPT_RO "ro"
+#define MNTOPT_SEP ','
 
 static int has_mntopt(const char *opts, const char *opt)
 {
@@ -172,8 +171,8 @@ static int has_mntopt(const char *opts, const char *opt)
 }
 
 #ifndef LINE_MAX
-#define LINE_MAX	2048
-#endif	/* LINE_MAX */
+#define LINE_MAX 2048
+#endif /* LINE_MAX */
 
 static int nilfs_find_fs(struct nilfs *nilfs, const char *dev, const char *dir,
 			 const char *opt)
@@ -244,16 +243,16 @@ static int nilfs_find_fs(struct nilfs *nilfs, const char *dev, const char *dir,
 	if (ret < 0)
 		errno = ENOENT;
 
- failed_proc_mounts:
+failed_proc_mounts:
 	fclose(fp);
 
- failed_dir:
+failed_dir:
 	free(cdir);
 
- failed_dev:
+failed_dev:
 	free(cdev);
 
- failed:
+failed:
 	return ret;
 }
 
@@ -263,8 +262,8 @@ static int nilfs_find_fs(struct nilfs *nilfs, const char *dev, const char *dir,
  * @layout: buffer to nilfs_layout struct
  * @layout_size: size of layout structure (used to ensure compatibility)
  */
-ssize_t nilfs_get_layout(const struct nilfs *nilfs,
-			 struct nilfs_layout *layout, size_t layout_size)
+ssize_t nilfs_get_layout(const struct nilfs *nilfs, struct nilfs_layout *layout,
+			 size_t layout_size)
 {
 	const struct nilfs_super_block *sb = nilfs->n_sb;
 
@@ -353,7 +352,7 @@ static int __nilfs_opt_set_mmap(struct nilfs *nilfs)
 	}
 
 	segsize = nilfs_get_blocks_per_segment(nilfs) *
-		nilfs_get_block_size(nilfs);
+		  nilfs_get_block_size(nilfs);
 	if (segsize % pagesize != 0)
 		return -1;
 
@@ -369,7 +368,7 @@ int nilfs_opt_test(const struct nilfs *nilfs, unsigned int index)
 {
 	if (unlikely(index >= __NR_NILFS_OPT)) {
 		errno = EINVAL;
-		return 0;	/* return false for unknown options */
+		return 0; /* return false for unknown options */
 	}
 	return !!(nilfs->n_opts & (1 << index));
 }
@@ -498,15 +497,14 @@ struct nilfs *nilfs_open(const char *dev, const char *dir, int flags)
 			goto out_fd;
 
 		features = le64_to_cpu(nilfs->n_sb->s_feature_incompat) &
-			~NILFS_FEATURE_INCOMPAT_SUPP;
+			   ~NILFS_FEATURE_INCOMPAT_SUPP;
 		if (unlikely(features)) {
 			errno = ENOTSUP;
 			goto out_fd;
 		}
 	}
 
-	if (flags &
-	    (NILFS_OPEN_RDONLY | NILFS_OPEN_WRONLY | NILFS_OPEN_RDWR)) {
+	if (flags & (NILFS_OPEN_RDONLY | NILFS_OPEN_WRONLY | NILFS_OPEN_RDWR)) {
 		if (nilfs_find_fs(nilfs, dev, dir, MNTOPT_RW) < 0) {
 			if (!(flags & NILFS_OPEN_RDONLY))
 				goto out_fd;
@@ -757,8 +755,8 @@ ssize_t nilfs_get_suinfo(const struct nilfs *nilfs, uint64_t segnum,
  *
  * Return Value: On success, 0 is returned. On error, -1 is returned.
  */
-int nilfs_set_suinfo(const struct nilfs *nilfs,
-		     struct nilfs_suinfo_update *sup, size_t nsup)
+int nilfs_set_suinfo(const struct nilfs *nilfs, struct nilfs_suinfo_update *sup,
+		     size_t nsup)
 {
 	struct nilfs_argv argv;
 
@@ -797,8 +795,8 @@ int nilfs_get_sustat(const struct nilfs *nilfs, struct nilfs_sustat *sustat)
  * @vinfo: array of nilfs_vinfo structs to store information in
  * @nvi: size of @vinfo array (number of items)
  */
-ssize_t nilfs_get_vinfo(const struct nilfs *nilfs,
-			struct nilfs_vinfo *vinfo, size_t nvi)
+ssize_t nilfs_get_vinfo(const struct nilfs *nilfs, struct nilfs_vinfo *vinfo,
+			size_t nvi)
 {
 	struct nilfs_argv argv;
 	int ret;
@@ -825,8 +823,8 @@ ssize_t nilfs_get_vinfo(const struct nilfs *nilfs,
  * @bdescs: array of nilfs_bdesc structs to store information in
  * @nbdescs: size of @bdescs array (number of items)
  */
-ssize_t nilfs_get_bdescs(const struct nilfs *nilfs,
-			 struct nilfs_bdesc *bdescs, size_t nbdescs)
+ssize_t nilfs_get_bdescs(const struct nilfs *nilfs, struct nilfs_bdesc *bdescs,
+			 size_t nbdescs)
 {
 	struct nilfs_argv argv;
 	int ret;
@@ -861,12 +859,11 @@ ssize_t nilfs_get_bdescs(const struct nilfs *nilfs,
  * @segnums: array of segment numbers to specify segments to be freed
  * @nsegs: size of @segnums array (number of items)
  */
-int nilfs_clean_segments(struct nilfs *nilfs,
-			 struct nilfs_vdesc *vdescs, size_t nvdescs,
-			 struct nilfs_period *periods, size_t nperiods,
-			 uint64_t *vblocknrs, size_t nvblocknrs,
-			 struct nilfs_bdesc *bdescs, size_t nbdescs,
-			 uint64_t *segnums, size_t nsegs)
+int nilfs_clean_segments(struct nilfs *nilfs, struct nilfs_vdesc *vdescs,
+			 size_t nvdescs, struct nilfs_period *periods,
+			 size_t nperiods, uint64_t *vblocknrs,
+			 size_t nvblocknrs, struct nilfs_bdesc *bdescs,
+			 size_t nbdescs, uint64_t *segnums, size_t nsegs)
 {
 	struct nilfs_argv argv[5];
 
@@ -1044,8 +1041,8 @@ int nilfs_get_segment(const struct nilfs *nilfs, uint64_t segnum,
 			    nilfs->n_devfd, segstart - page_offset);
 		if (likely(addr != MAP_FAILED)) {
 			segment->mmapped = 1;
-			segment->adjusted = (page_offset != 0 ||
-					     alloc_size != pagesize);
+			segment->adjusted =
+				(page_offset != 0 || alloc_size != pagesize);
 			goto success;
 		}
 
@@ -1057,7 +1054,7 @@ int nilfs_get_segment(const struct nilfs *nilfs, uint64_t segnum,
 		 */
 		errno = errsv;
 	}
-#endif	/* HAVE_MMAP */
+#endif /* HAVE_MMAP */
 
 	addr = malloc(segsize);
 	if (unlikely(addr == NULL))
@@ -1113,7 +1110,7 @@ int nilfs_put_segment(struct nilfs_segment *segment)
 #else
 		errno = EINVAL;
 		return -1;
-#endif	/* HAVE_MMAP */
+#endif /* HAVE_MMAP */
 	}
 
 	free(segment->addr);
@@ -1148,7 +1145,8 @@ int nilfs_get_segment_seqnum(const struct nilfs *nilfs, uint64_t segnum,
 	blkbits = le32_to_cpu(sb->s_log_block_size) + 10;
 	blocks_per_segment = le32_to_cpu(sb->s_blocks_per_segment);
 	segstart = (segnum == 0 ? le64_to_cpu(sb->s_first_data_block) :
-		    blocks_per_segment * segnum) << blkbits;
+				  blocks_per_segment * segnum)
+		   << blkbits;
 
 	offset = segstart + offsetof(struct nilfs_segment_summary, ss_seq);
 	ret = pread(nilfs->n_devfd, &buf, sizeof(buf), offset);
@@ -1170,13 +1168,22 @@ nilfs_cno_t nilfs_get_oldest_cno(struct nilfs *nilfs)
 /**
  * nilfs_dedup - deduplicate
  * @nilfs: nilfs object
- * @blocks_to_consider: blocks to consider
+ * @payload: payload
  */
-int nilfs_dedup(const struct nilfs *nilfs, __u64 blocks_to_consider)
+int nilfs_dedup(const struct nilfs *nilfs,
+		const struct nilfs_deduplication_payload *payload)
 {
 	if (unlikely(nilfs->n_iocfd < 0)) {
 		errno = EBADF;
 		return -1;
 	}
-	return ioctl(nilfs->n_iocfd, NILFS_IOCTL_DEDUP, &blocks_to_consider);
+
+	struct nilfs_argv argv;
+	argv.v_base = (unsigned long)payload;
+	argv.v_nmembs = 1;
+	argv.v_size = sizeof(struct nilfs_deduplication_payload);
+	argv.v_index = 0;
+	argv.v_flags = 0;
+
+	return ioctl(nilfs->n_iocfd, NILFS_IOCTL_DEDUP, &argv);
 }

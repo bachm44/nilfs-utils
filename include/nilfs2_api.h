@@ -260,6 +260,17 @@ struct nilfs_bdesc {
 	__u32 bd_pad;
 };
 
+struct nilfs_deduplication_block {
+	__u64 ino;
+	__u64 blocknr;
+};
+
+struct nilfs_deduplication_payload {
+	struct nilfs_deduplication_block src;
+	__u64 dst_count;
+	struct nilfs_deduplication_block *dst;
+};
+
 #define NILFS_IOCTL_IDENT	'n'
 
 #define NILFS_IOCTL_CHANGE_CPMODE					\
