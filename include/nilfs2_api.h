@@ -288,5 +288,7 @@ struct nilfs_bdesc {
 	_IOW(NILFS_IOCTL_IDENT, 0x8C, __u64[2])
 #define NILFS_IOCTL_SET_SUINFO						\
 	_IOW(NILFS_IOCTL_IDENT, 0x8D, struct nilfs_argv)
+#define NILFS_IOCTL_DEDUP							\
+	_IOW(NILFS_IOCTL_IDENT, 0x8E, __u64)	
 
 #endif /* _LINUX_NILFS2_API_H */
