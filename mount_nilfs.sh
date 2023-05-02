@@ -1,21 +1,23 @@
-#!/bin/bash
+#!/bin/sh
 
-set -euo pipefail
+set -euo pipefail # fail on error
+set -x # logging
+IFS=$'\n\t'
 
-FILESYSTEM_FILE=nilfs.bin
-DESTINATION=/tmp/mnt
+FS_MNT_DIR=/mnt/nilfs2
+FS_FILE_SIZE=500M
+FS_BIN_FILE=nilfs2.bin
+LOOP_INTERFACE=/dev/loop1
 
-umount $DESTINATION || true
-rm -fv $FILESYSTEM_FILE
-fallocate -l 1GiB $FILESYSTEM_FILE
-mkfs -t nilfs2 $FILESYSTEM_FILE
-rm -rfv /tmp/mnt
-mkdir -pv $DESTINATION
+rm -f $FS_BIN_FILE
+fallocate -l $FS_FILE_SIZE $FS_BIN_FILE
+losetup -P $LOOP_INTERFACE $FS_BIN_FILE
+mkfs.nilfs2 $LOOP_INTERFACE -B 16
+nilfs-tune -i 1 /dev/loop0
+mkdir -p $FS_MNT_DIR
+mount -t nilfs2 $LOOP_INTERFACE $FS_MNT_DIR
 
-mount -i -v -t nilfs2 $FILESYSTEM_FILE $DESTINATION
-
-echo "123456789" > $DESTINATION/f1
-echo "123456789" > $DESTINATION/f2
-echo "123456789" > $DESTINATION/f3
+echo "123456789" > $FS_MNT_DIR/f1
+echo "123456789" > $FS_MNT_DIR/f2
 
 ## in case of failure, run script again

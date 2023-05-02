@@ -227,6 +227,9 @@ static int nilfs_find_fs(struct nilfs *nilfs, const char *dev, const char *dir,
 		}
 
 		if (has_mntopt(mntent[MNTFLD_OPTS], opt)) {
+			if (nilfs->n_dev)
+				free(nilfs->n_dev);
+
 			nilfs->n_dev = strdup(mntent[MNTFLD_FS]);
 			if (unlikely(nilfs->n_dev == NULL))
 				goto failed_proc_mounts;

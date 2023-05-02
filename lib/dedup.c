@@ -575,7 +575,7 @@ void hashtable_result_free(struct hashtable_result *result)
 void hashtable_free(struct hashtable *table)
 {
 	if (table) {
-		for (uint32_t i = 0; i < table->count; ++i) {
+		for (uint32_t i = 0; i < table->size; ++i) {
 			struct bucket *bucket = table->items[i];
 
 			if (bucket) {
@@ -688,6 +688,13 @@ populate_hashtable_with_block_crc(const struct nilfs *nilfs)
 
 			nilfs_file_for_each(&file, &psegment)
 			{
+				if (file.finfo->fi_ino < NILFS_USER_INO) {
+					logger(LOG_DEBUG,
+					       "skipping special inode number: %d",
+					       file.finfo->fi_ino);
+					continue;
+				}
+
 				struct nilfs_block block;
 
 				nilfs_block_for_each(&block, &file)
@@ -704,6 +711,9 @@ populate_hashtable_with_block_crc(const struct nilfs *nilfs)
 								  ->fi_ino,
 						.extent_length = BLOCK_SIZE
 					};
+					logger(LOG_DEBUG,
+					       "adding blocknr = %d, ino = %d, crc = %d to hashtable",
+					       info.blocknr, info.fi_ino, crc);
 					hashtable_put(
 						table, crc, &info,
 						sizeof(struct block_info));
@@ -777,6 +787,9 @@ bool deduplication_payload_for_bucket(const struct bucket *bucket,
 {
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 
+	assert(*out);
+	assert(bucket);
+
 	const struct nilfs_vector *blocks = blocks_for_bucket(bucket);
 	const size_t blocks_count = nilfs_vector_get_size(blocks);
 
@@ -794,9 +807,9 @@ bool deduplication_payload_for_bucket(const struct bucket *bucket,
 	(*out)->dst = malloc(sizeof(struct nilfs_deduplication_block) *
 			     (*out)->dst_count);
 
-	for (size_t i = 1; i < blocks_count; ++i) {
+	for (size_t i = 0; i < (*out)->dst_count; ++i) {
 		const struct nilfs_deduplication_block *dst =
-			nilfs_vector_get_element(blocks, i);
+			nilfs_vector_get_element(blocks, i + 1);
 		(*out)->dst[i] = *dst;
 	}
 
@@ -829,7 +842,6 @@ static void free_payloads(struct nilfs_vector *payloads)
 		const deduplication_payload_t *payload =
 			nilfs_vector_get_element(payloads, i);
 		free(payload->dst);
-		free((void *)payload);
 	}
 
 	nilfs_vector_destroy(payloads);
