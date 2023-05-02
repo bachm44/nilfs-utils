@@ -1,6 +1,8 @@
 #include "dedup.h"
+#include "compat.h"
 #include "nilfs.h"
 #include "nilfs2_api.h"
+#include "nilfs2_ondisk.h"
 #include "perr.h"
 #include "util.h"
 #include "vector.h"
@@ -23,8 +25,6 @@
 #undef NDEBUG
 
 #define BUFFER_SIZE 1000000
-#define MAX_FILES 4096
-#define MAX_FILE_DESCRIPTORS 256
 typedef __u64 sector_t;
 
 #define nilfs_crc32(seed, data, length) crc32_le(seed, data, length)
@@ -617,27 +617,40 @@ struct block_info {
 	__u64 extent_length;
 };
 
-static __le64 block_bd_offset(const struct nilfs_block *blk,
-			      const struct nilfs_file *file)
+static bool block_extract_vdesc_success(struct nilfs_file *file,
+					struct nilfs_block *block,
+					struct nilfs_vdesc *vdesc)
 {
-	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+	const ino_t ino = le64_to_cpu(file->finfo->fi_ino);
 
-	union nilfs_binfo *binfo;
-	if (nilfs_file_use_real_blocknr(file)) {
-		if (nilfs_block_is_data(blk)) {
-			return le64_to_cpu(*(__le64 *)blk->binfo);
-		} else {
-			binfo = blk->binfo;
-			return le64_to_cpu(binfo->bi_dat.bi_blkoff);
-		}
-	} else {
-		if (nilfs_block_is_data(blk)) {
-			binfo = blk->binfo;
-			return le64_to_cpu(binfo->bi_v.bi_blkoff);
-		} else {
-			return le64_to_cpu(*(__le64 *)blk->binfo);
-		}
+	// since we do not want to deduplicate DAT files, we exclude
+	// them in earlier method, however if some error happens we
+	// need to be sure (only DAT file uses real blocknr which can
+	// compilicate stuff)
+	if (ino < NILFS_USER_INO) {
+		logger(LOG_INFO, "incorrect inode number %ld, skipping", ino);
+		return false;
 	}
+
+	const nilfs_cno_t cno = le64_to_cpu(file->finfo->fi_cno);
+
+	vdesc->vd_ino = ino;
+	vdesc->vd_cno = cno;
+	vdesc->vd_blocknr = block->blocknr;
+
+	if (nilfs_block_is_data(block)) {
+		const union nilfs_binfo *binfo = block->binfo;
+		vdesc->vd_vblocknr = le64_to_cpu(binfo->bi_v.bi_vblocknr);
+		vdesc->vd_offset = le64_to_cpu(binfo->bi_v.bi_blkoff);
+		vdesc->vd_flags = 0; /* data */
+		vdesc->vd_pad = 0;
+		return true;
+	}
+
+	logger(LOG_INFO, "block with number %ld is a node block, skipping",
+	       block->blocknr);
+
+	return false;
 }
 
 static struct hashtable *
@@ -699,24 +712,20 @@ populate_hashtable_with_block_crc(const struct nilfs *nilfs)
 
 				nilfs_block_for_each(&block, &file)
 				{
+					struct nilfs_vdesc vdesc;
+					if (!block_extract_vdesc_success(
+						    &file, &block, &vdesc)) {
+						continue;
+					}
+
 					const uint32_t crc =
 						block_crc(block.blocknr);
-					const struct block_info info = {
-						.blocknr = block.blocknr,
-						.offset = block.offset,
-						.index = block.index,
-						.bd_offset = block_bd_offset(
-							&block, &file),
-						.fi_ino = block.file->finfo
-								  ->fi_ino,
-						.extent_length = BLOCK_SIZE
-					};
 					logger(LOG_DEBUG,
 					       "adding blocknr = %d, ino = %d, crc = %d to hashtable",
-					       info.blocknr, info.fi_ino, crc);
-					hashtable_put(
-						table, crc, &info,
-						sizeof(struct block_info));
+					       vdesc.vd_blocknr, vdesc.vd_ino,
+					       crc);
+					hashtable_put(table, crc, &vdesc,
+						      sizeof(vdesc));
 				}
 			}
 		}
@@ -726,7 +735,6 @@ populate_hashtable_with_block_crc(const struct nilfs *nilfs)
 		}
 	}
 
-	assert(table);
 	return table;
 }
 
@@ -755,12 +763,13 @@ typedef struct nilfs_deduplication_payload deduplication_payload_t;
 
 static void
 fill_deduplication_payload(struct nilfs_deduplication_block *payload,
-			   const struct block_info *info)
+			   const struct nilfs_vdesc *info)
 {
-	payload->ino = info->fi_ino;
-	payload->blocknr = info->blocknr;
-	payload->bd_offset = info->bd_offset;
-	payload->offset = info->offset;
+	payload->ino = info->vd_ino;
+	payload->cno = info->vd_cno;
+	payload->vblocknr = info->vd_vblocknr;
+	payload->blocknr = info->vd_blocknr;
+	payload->offset = info->vd_offset;
 }
 
 static const struct nilfs_vector *blocks_for_bucket(const struct bucket *bucket)
@@ -775,7 +784,7 @@ static const struct nilfs_vector *blocks_for_bucket(const struct bucket *bucket)
 	for (size_t i = 0; i < bucket->count; ++i) {
 		struct nilfs_deduplication_block *payload =
 			nilfs_vector_get_new_element(blocks);
-		const struct block_info *block = bucket->items[i]->value;
+		const struct nilfs_vdesc *block = bucket->items[i]->value;
 
 		fill_deduplication_payload(payload, block);
 	}
@@ -881,11 +890,6 @@ static struct nilfs_vector *obtain_payloads(const struct hashtable *table)
 		const struct bucket *bucket = table->items[i];
 
 		if (bucket && bucket_has_multiple_items(bucket)) {
-			if (bucket->count >= MAX_FILE_DESCRIPTORS)
-				logger(LOG_WARNING,
-				       "bucket count exceeds MAX_FILE_DESCRIPTORS, %d >= %d",
-				       bucket->count, MAX_FILE_DESCRIPTORS);
-
 			deduplication_payload_t *payload =
 				nilfs_vector_get_new_element(payloads);
 
