@@ -754,11 +754,13 @@ into source
 typedef struct nilfs_deduplication_payload deduplication_payload_t;
 
 static void
-fill_deduplication_payload(struct nilfs_deduplication_block *payload, __u64 ino,
-			   __u64 blocknr)
+fill_deduplication_payload(struct nilfs_deduplication_block *payload,
+			   const struct block_info *info)
 {
-	payload->ino = ino;
-	payload->blocknr = blocknr;
+	payload->ino = info->fi_ino;
+	payload->blocknr = info->blocknr;
+	payload->bd_offset = info->bd_offset;
+	payload->offset = info->offset;
 }
 
 static const struct nilfs_vector *blocks_for_bucket(const struct bucket *bucket)
@@ -775,8 +777,7 @@ static const struct nilfs_vector *blocks_for_bucket(const struct bucket *bucket)
 			nilfs_vector_get_new_element(blocks);
 		const struct block_info *block = bucket->items[i]->value;
 
-		fill_deduplication_payload(payload, block->fi_ino,
-					   block->blocknr);
+		fill_deduplication_payload(payload, block);
 	}
 
 	return blocks;
