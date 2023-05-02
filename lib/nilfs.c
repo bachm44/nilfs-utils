@@ -1174,7 +1174,7 @@ nilfs_cno_t nilfs_get_oldest_cno(struct nilfs *nilfs)
  * @payload: payload
  */
 int nilfs_dedup(const struct nilfs *nilfs,
-		const struct nilfs_deduplication_payload *payload)
+		const struct nilfs_deduplication_block *payload, size_t count)
 {
 	if (unlikely(nilfs->n_iocfd < 0)) {
 		errno = EBADF;
@@ -1183,8 +1183,8 @@ int nilfs_dedup(const struct nilfs *nilfs,
 
 	struct nilfs_argv argv;
 	argv.v_base = (unsigned long)payload;
-	argv.v_nmembs = 1;
-	argv.v_size = sizeof(struct nilfs_deduplication_payload);
+	argv.v_nmembs = count;
+	argv.v_size = sizeof(struct nilfs_deduplication_block);
 	argv.v_index = 0;
 	argv.v_flags = 0;
 

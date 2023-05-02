@@ -818,8 +818,26 @@ bool deduplication_payload_for_bucket(const struct bucket *bucket,
 	return true;
 }
 
-void deduplicate_payloads(const struct nilfs *nilfs,
-			  const struct nilfs_vector *payloads)
+static struct nilfs_deduplication_block *
+convert_payload(const deduplication_payload_t *payload)
+{
+	const size_t count = payload->dst_count + 1;
+	assert(count >= 2);
+
+	struct nilfs_deduplication_block *blocks =
+		malloc(sizeof(struct nilfs_deduplication_block) * count);
+
+	blocks[0] = payload->src;
+
+	for (size_t i = 1; i < count; ++i) {
+		blocks[i] = payload->dst[i - 1];
+	}
+
+	return blocks;
+}
+
+static void deduplicate_payloads(const struct nilfs *nilfs,
+				 const struct nilfs_vector *payloads)
 {
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 
@@ -827,10 +845,14 @@ void deduplicate_payloads(const struct nilfs *nilfs,
 		const deduplication_payload_t *payload =
 			nilfs_vector_get_element(payloads, i);
 
-		if (nilfs_dedup(nilfs, payload) < 0) {
+		struct nilfs_deduplication_block *converted_payload =
+			convert_payload(payload);
+		if (nilfs_dedup(nilfs, converted_payload,
+				payload->dst_count + 1) < 0) {
 			logger(LOG_ERR, "cannot call ioctl: %s",
 			       strerror(errno));
 		}
+		free(converted_payload);
 	}
 }
 
