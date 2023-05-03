@@ -745,20 +745,6 @@ static bool bucket_has_multiple_items(const struct bucket *bucket)
 	return bucket->count > 1;
 }
 
-// struct deduplication_payload {
-// 	sector_t src_blocknr;
-// 	__u64 dst_count;
-// 	sector_t *dst_blocknr;
-// };
-
-/*
-We reuse nilfs_vdesc structure in order not to change
-nilfs2 api. This structure is used in the following way:
-- first element is the source block
-- next elements are destination blocks that will be deduplicated
-into source
-*/
-
 typedef struct nilfs_deduplication_payload deduplication_payload_t;
 
 static void
