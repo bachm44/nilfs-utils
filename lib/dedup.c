@@ -617,8 +617,8 @@ struct block_info {
 	__u64 extent_length;
 };
 
-static bool block_extract_vdesc_success(struct nilfs_file *file,
-					struct nilfs_block *block,
+static bool block_extract_vdesc_success(const struct nilfs_file *file,
+					const struct nilfs_block *block,
 					struct nilfs_vdesc *vdesc)
 {
 	const ino_t ino = le64_to_cpu(file->finfo->fi_ino);
@@ -659,8 +659,138 @@ static bool block_empty(const struct nilfs_block *block)
 	return strnlen(payload, blocksize) == 0;
 }
 
-static struct hashtable *
-populate_hashtable_with_block_crc(const struct nilfs *nilfs)
+static int populate_hashtable_with_segment_psegment_file_blocks(
+	const struct nilfs_file *file, struct hashtable **table)
+{
+	struct nilfs_block block;
+
+	nilfs_block_for_each(&block, file)
+	{
+		if (block_empty(&block)) {
+			logger(LOG_INFO,
+			       "skipping empty block with blocknr = %d",
+			       block.blocknr);
+			continue;
+		}
+
+		struct nilfs_vdesc vdesc;
+		if (!block_extract_vdesc_success(file, &block, &vdesc)) {
+			continue;
+		}
+
+		const uint32_t crc = block_crc(block.blocknr);
+		logger(LOG_DEBUG,
+		       "adding blocknr = %d, ino = %d, crc = %d to hashtable",
+		       vdesc.vd_blocknr, vdesc.vd_ino, crc);
+
+		hashtable_put(*table, crc, &vdesc, sizeof(vdesc));
+	}
+
+	return EXIT_SUCCESS;
+}
+
+static int populate_hashtable_with_segment_psegment_files(
+	const struct nilfs_psegment *psegment, struct hashtable **table)
+{
+	struct nilfs_file file;
+	nilfs_file_for_each(&file, psegment)
+	{
+		if (file.finfo->fi_ino < NILFS_USER_INO) {
+			logger(LOG_DEBUG, "skipping special inode number: %d",
+			       file.finfo->fi_ino);
+			continue;
+		}
+
+		const int ret =
+			populate_hashtable_with_segment_psegment_file_blocks(
+				&file, table);
+
+		if (ret)
+			continue;
+	}
+
+	const char *errstr;
+	if (nilfs_file_is_error(&file, &errstr)) {
+		logger(LOG_WARNING,
+		       "error %d (%s) while reading finfo at offset = %lu at pseg blocknr = %llu, segnum = %llu",
+		       file.error, errstr, (unsigned long)file.offset,
+		       (unsigned long long)psegment->blocknr,
+		       (unsigned long long)psegment->segment->segnum);
+		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
+}
+
+static int
+populate_hashtable_with_segment_psegments(const struct nilfs_suinfo *si,
+					  const struct nilfs_segment *segment,
+					  struct hashtable **table)
+{
+	struct nilfs_psegment psegment;
+	const int block_count = si->sui_nblocks;
+
+	nilfs_psegment_for_each(&psegment, segment, block_count)
+	{
+		const int ret = populate_hashtable_with_segment_psegment_files(
+			&psegment, table);
+		if (ret)
+			continue;
+	}
+
+	const char *errstr;
+	if (nilfs_psegment_is_error(&psegment, &errstr)) {
+		logger(LOG_WARNING,
+		       "error %d (%s) while reading segment summary at pseg blocknr = %llu, segnum = %llu",
+		       psegment.error, errstr,
+		       (unsigned long long)psegment.blocknr,
+		       (unsigned long long)segment->segnum);
+		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
+}
+
+static int populate_hashtable_with_segment(const struct nilfs *nilfs,
+					   size_t segment_number,
+					   struct hashtable **table)
+{
+	struct nilfs_segment segment;
+	struct nilfs_suinfo si;
+
+	if (unlikely(nilfs_get_segment(nilfs, segment_number, &segment) < 0)) {
+		logger(LOG_ERR, "cannot fetch segment");
+		return EXIT_FAILURE;
+	}
+
+	if (unlikely(nilfs_get_suinfo(nilfs, segment_number, &si, 1) < 0)) {
+		logger(LOG_ERR, "cannot fetch suinfo");
+		return EXIT_FAILURE;
+	}
+
+	if (si.sui_nblocks == 0) {
+		return EXIT_FAILURE;
+	}
+
+	logger(LOG_DEBUG, "SEGMENT NUMBER: %zu", segment_number);
+	print_nilfs_suinfo(&si);
+	print_nilfs_segment(&segment);
+
+	const int ret =
+		populate_hashtable_with_segment_psegments(&si, &segment, table);
+
+	if (ret)
+		return ret;
+
+	if (unlikely(nilfs_put_segment(&segment))) {
+		logger(LOG_ERR, "failed to release segment");
+		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
+}
+
+static struct hashtable *populate_hashtable(const struct nilfs *nilfs)
 {
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 
@@ -672,80 +802,13 @@ populate_hashtable_with_block_crc(const struct nilfs *nilfs)
 		exit(EXIT_FAILURE);
 	}
 
-	struct nilfs_suinfo si;
-
 	for (size_t segment_number = 0; segment_number < nsegments;
 	     ++segment_number) {
-		struct nilfs_segment segment;
+		const int ret = populate_hashtable_with_segment(
+			nilfs, segment_number, &table);
 
-		if (unlikely(nilfs_get_segment(nilfs, segment_number,
-					       &segment) < 0)) {
-			logger(LOG_ERR, "cannot fetch segment");
-			exit(EXIT_FAILURE);
-		}
-
-		if (unlikely(nilfs_get_suinfo(nilfs, segment_number, &si, 1) <
-			     0)) {
-			logger(LOG_ERR, "cannot fetch suinfo");
-			exit(EXIT_FAILURE);
-		}
-
-		if (si.sui_nblocks == 0) {
+		if (ret)
 			continue;
-		}
-
-		logger(LOG_DEBUG, "SEGMENT NUMBER: %zu", segment_number);
-		print_nilfs_suinfo(&si);
-		print_nilfs_segment(&segment);
-
-		struct nilfs_psegment psegment;
-		const int block_count = si.sui_nblocks;
-
-		nilfs_psegment_for_each(&psegment, &segment, block_count)
-		{
-			struct nilfs_file file;
-
-			nilfs_file_for_each(&file, &psegment)
-			{
-				if (file.finfo->fi_ino < NILFS_USER_INO) {
-					logger(LOG_DEBUG,
-					       "skipping special inode number: %d",
-					       file.finfo->fi_ino);
-					continue;
-				}
-
-				struct nilfs_block block;
-
-				nilfs_block_for_each(&block, &file)
-				{
-					if (block_empty(&block)) {
-						logger(LOG_INFO,
-						       "skipping empty block with blocknr = %d",
-						       block.blocknr);
-						continue;
-					}
-
-					struct nilfs_vdesc vdesc;
-					if (!block_extract_vdesc_success(
-						    &file, &block, &vdesc)) {
-						continue;
-					}
-
-					const uint32_t crc =
-						block_crc(block.blocknr);
-					logger(LOG_DEBUG,
-					       "adding blocknr = %d, ino = %d, crc = %d to hashtable",
-					       vdesc.vd_blocknr, vdesc.vd_ino,
-					       crc);
-					hashtable_put(table, crc, &vdesc,
-						      sizeof(vdesc));
-				}
-			}
-		}
-
-		if (unlikely(nilfs_put_segment(&segment))) {
-			logger(LOG_ERR, "failed to release segment");
-		}
 	}
 
 	return table;
@@ -953,7 +1016,7 @@ static void deduplicate(const struct nilfs *restrict nilfs)
 	struct nilfs_vector *deduplication_payloads = NULL;
 
 	while (true) {
-		crc_table = populate_hashtable_with_block_crc(nilfs);
+		crc_table = populate_hashtable(nilfs);
 		deduplication_payloads = obtain_payloads(crc_table);
 
 		if (nilfs_vector_get_size(deduplication_payloads) != 0) {
