@@ -656,7 +656,7 @@ static bool block_extract_vdesc_success(struct nilfs_file *file,
 static bool block_empty(const struct nilfs_block *block)
 {
 	const char *payload = map_disk_buffer(block->blocknr, 0);
-	return strnlen(payload, blocksize) < 2;
+	return strnlen(payload, blocksize) == 0;
 }
 
 static struct hashtable *
