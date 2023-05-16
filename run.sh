@@ -1,3 +1,3 @@
 #!/bin/bash
 
-sudo libtool --mode=execute bin/dedup /dev/loop0
+sudo libtool --mode=execute bin/dedup -vvv /dev/loop5

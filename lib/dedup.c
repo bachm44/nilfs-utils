@@ -653,6 +653,12 @@ static bool block_extract_vdesc_success(struct nilfs_file *file,
 	return false;
 }
 
+static bool block_empty(const struct nilfs_block *block)
+{
+	const char *payload = map_disk_buffer(block->blocknr, 0);
+	return strnlen(payload, blocksize) < 2;
+}
+
 static struct hashtable *
 populate_hashtable_with_block_crc(const struct nilfs *nilfs)
 {
@@ -712,6 +718,13 @@ populate_hashtable_with_block_crc(const struct nilfs *nilfs)
 
 				nilfs_block_for_each(&block, &file)
 				{
+					if (block_empty(&block)) {
+						logger(LOG_INFO,
+						       "skipping empty block with blocknr = %d",
+						       block.blocknr);
+						continue;
+					}
+
 					struct nilfs_vdesc vdesc;
 					if (!block_extract_vdesc_success(
 						    &file, &block, &vdesc)) {
