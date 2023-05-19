@@ -102,15 +102,17 @@ taken from sbin/mkfs.c:825-851
 
 typedef uint64_t blocknr_t;
 static void **disk_buffer;
-static unsigned long disk_buffer_size;
+const static unsigned long disk_buffer_size = 512;
+static unsigned long disk_buffer_block_sector = 0;
+static const char *device;
 
 #define NILFS_DEF_BLOCKSIZE_BITS \
 	12 /* default blocksize = 2^12
 						bytes */
 #define NILFS_DEF_BLOCKSIZE (1 << NILFS_DEF_BLOCKSIZE_BITS)
 
-static unsigned long blocksize = NILFS_DEF_BLOCKSIZE;
-static void init_disk_buffer(long max_blocks);
+static const unsigned long blocksize = NILFS_DEF_BLOCKSIZE;
+static void init_disk_buffer(void);
 static void destroy_disk_buffer(void);
 static void *map_disk_buffer(blocknr_t blocknr, int clear_flag);
 
@@ -129,24 +131,19 @@ static void destroy_disk_buffer(void)
 	}
 }
 
-static void init_disk_buffer(long max_blocks)
+static void init_disk_buffer(void)
 {
-	disk_buffer = calloc(max_blocks, sizeof(void *));
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+	disk_buffer = calloc(disk_buffer_size, sizeof(void *));
 	if (!disk_buffer)
 		perr_cannot_allocate_memory();
 
-	memset(disk_buffer, 0, max_blocks * sizeof(void *));
-	disk_buffer_size = max_blocks;
-
+	memset(disk_buffer, 0, disk_buffer_size * sizeof(void *));
 	atexit(destroy_disk_buffer);
 }
 
 static void *map_disk_buffer(blocknr_t blocknr, int clear_flag)
 {
-	if (blocknr >= disk_buffer_size)
-		perr("Internal error: illegal disk buffer access (blocknr=%llu)",
-		     blocknr);
-
 	if (!disk_buffer[blocknr]) {
 		if (posix_memalign(&disk_buffer[blocknr], blocksize,
 				   blocksize) != 0)
@@ -157,8 +154,10 @@ static void *map_disk_buffer(blocknr_t blocknr, int clear_flag)
 	return disk_buffer[blocknr];
 }
 
-static void fetch_disk_buffer(const char *restrict device)
+static void fetch_disk_buffer(__off_t sector_start_blocknr)
 {
+	logger(LOG_DEBUG, "initializing buffer with start blocknr %d",
+	       sector_start_blocknr);
 	const int fd = open(device, O_RDWR);
 	if (unlikely(fd < 0)) {
 		logger(LOG_ERR, "cannot fetch disk buffer: %s",
@@ -166,8 +165,14 @@ static void fetch_disk_buffer(const char *restrict device)
 		exit(EXIT_FAILURE);
 	}
 
-	lseek(fd, 0, SEEK_SET);
-	for (size_t i = 0; i < 512; ++i) {
+	const int current_offset =
+		lseek(fd, sector_start_blocknr * blocksize, SEEK_SET);
+
+	if (current_offset < 0) {
+		logger(LOG_ERR, "cannot lseek sector: %s", strerror(errno));
+	}
+
+	for (size_t i = 0; i < disk_buffer_size; ++i) {
 		if (read(fd, map_disk_buffer(i, 0), blocksize) < 0) {
 			logger(LOG_ERR,
 			       "cannot map disk buffer for fd = %d, blocksize = %lld: %s",
@@ -175,6 +180,41 @@ static void fetch_disk_buffer(const char *restrict device)
 			exit(EXIT_FAILURE);
 		}
 	}
+
+	if ((lseek(fd, 0, SEEK_SET)) < 0) {
+		logger(LOG_ERR, "cannot lseek: %s", strerror(errno));
+	}
+
+	if ((close(fd)) < 0) {
+		logger(LOG_ERR, "failed to close file: %s", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+}
+
+static void *fetch_disk_block(blocknr_t blocknr)
+{
+	__off_t sector_next_start_blocknr =
+		(disk_buffer_block_sector + 1) * disk_buffer_size;
+
+	while (blocknr >= (sector_next_start_blocknr)) {
+		destroy_disk_buffer();
+		init_disk_buffer();
+		fetch_disk_buffer(sector_next_start_blocknr);
+		++disk_buffer_block_sector;
+		sector_next_start_blocknr =
+			(disk_buffer_block_sector + 1) * disk_buffer_size;
+	}
+
+	const size_t index = blocknr % disk_buffer_size;
+
+	if (!disk_buffer || !disk_buffer[index]) {
+		logger(LOG_ERR,
+		       "failed to fetch disk buffer for blocknr = %ld, sector_start_blocknr = %ld",
+		       blocknr, sector_next_start_blocknr - disk_buffer_size);
+		exit(EXIT_FAILURE);
+	}
+
+	return disk_buffer[index];
 }
 
 // ===============================================================================
@@ -195,7 +235,7 @@ static struct nilfs *nilfs_open_safe(const char *restrict device)
 		logger(LOG_INFO, "nilfs opened");
 	} else {
 		logger(LOG_ERR, "cannot open fs: %s", strerror(errno));
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	return nilfs;
@@ -291,7 +331,7 @@ static void print_block_content(int blocknr)
 {
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 
-	const void *restrict content = map_disk_buffer(blocknr, 0);
+	const void *restrict content = fetch_disk_block(blocknr);
 	logger(LOG_DEBUG,
 	       "======================== BLOCK NUMBER %d ========================",
 	       blocknr);
@@ -599,7 +639,7 @@ static uint32_t block_crc(int blocknr)
 	if (dedup_options->verbose > 1)
 		print_block_content(blocknr);
 
-	const void *payload = map_disk_buffer(blocknr, 0);
+	const void *payload = fetch_disk_block(blocknr);
 	const int crc_seed = 123;
 	const uint32_t crc = nilfs_crc32(crc_seed, payload, blocksize);
 
@@ -647,7 +687,7 @@ static bool block_extract_vdesc_success(const struct nilfs_file *file,
 		return true;
 	}
 
-	logger(LOG_INFO, "block with number %ld is a node block, skipping",
+	logger(LOG_INFO, "blocknr %ld is a node block, skipping",
 	       block->blocknr);
 
 	return false;
@@ -655,7 +695,7 @@ static bool block_extract_vdesc_success(const struct nilfs_file *file,
 
 static bool block_empty(const struct nilfs_block *block)
 {
-	const char *payload = map_disk_buffer(block->blocknr, 0);
+	const char *payload = fetch_disk_block(block->blocknr);
 	return strnlen(payload, blocksize) == 0;
 }
 
@@ -675,6 +715,9 @@ static int populate_hashtable_with_segment_psegment_file_blocks(
 
 		struct nilfs_vdesc vdesc;
 		if (!block_extract_vdesc_success(file, &block, &vdesc)) {
+			logger(LOG_WARNING,
+			       "failed to extract vdesc block data from blocknr = %d",
+			       block.blocknr);
 			continue;
 		}
 
@@ -705,8 +748,13 @@ static int populate_hashtable_with_segment_psegment_files(
 			populate_hashtable_with_segment_psegment_file_blocks(
 				&file, table);
 
-		if (ret)
+		if (ret) {
+			logger(LOG_WARNING,
+			       "failed to read psegment file blocks, file.ino = %ld, file.cno = %ld, psegment.blocknr = %d ",
+			       file.finfo->fi_ino, file.finfo->fi_cno,
+			       psegment->blocknr);
 			continue;
+		}
 	}
 
 	const char *errstr;
@@ -734,8 +782,12 @@ populate_hashtable_with_segment_psegments(const struct nilfs_suinfo *si,
 	{
 		const int ret = populate_hashtable_with_segment_psegment_files(
 			&psegment, table);
-		if (ret)
+		if (ret) {
+			logger(LOG_WARNING,
+			       "failed to read psegment starting with blocknr %d",
+			       psegment.blocknr);
 			continue;
+		}
 	}
 
 	const char *errstr;
@@ -769,6 +821,7 @@ static int populate_hashtable_with_segment(const struct nilfs *nilfs,
 	}
 
 	if (si.sui_nblocks == 0) {
+		logger(LOG_WARNING, "segment %d is empty", segment_number);
 		return EXIT_FAILURE;
 	}
 
@@ -779,8 +832,12 @@ static int populate_hashtable_with_segment(const struct nilfs *nilfs,
 	const int ret =
 		populate_hashtable_with_segment_psegments(&si, &segment, table);
 
-	if (ret)
+	if (ret) {
+		logger(LOG_WARNING,
+		       "failed to populate hashtable with segment %d psegments",
+		       segment_number);
 		return ret;
+	}
 
 	if (unlikely(nilfs_put_segment(&segment))) {
 		logger(LOG_ERR, "failed to release segment");
@@ -790,11 +847,18 @@ static int populate_hashtable_with_segment(const struct nilfs *nilfs,
 	return EXIT_SUCCESS;
 }
 
+static int get_dirty_segments(const struct nilfs *nilfs)
+{
+	struct nilfs_sustat sustat;
+	nilfs_get_sustat(nilfs, &sustat);
+	return sustat.ss_ndirtysegs;
+}
+
 static struct hashtable *populate_hashtable(const struct nilfs *nilfs)
 {
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 
-	const int nsegments = nilfs_get_nsegments(nilfs);
+	const int nsegments = get_dirty_segments(nilfs);
 	struct hashtable *table = hashtable_create(BUFFER_SIZE);
 	if (!table) {
 		logger(LOG_ERR, "cannot allocate hashtable: %s",
@@ -807,8 +871,12 @@ static struct hashtable *populate_hashtable(const struct nilfs *nilfs)
 		const int ret = populate_hashtable_with_segment(
 			nilfs, segment_number, &table);
 
-		if (ret)
+		if (ret) {
+			logger(LOG_WARNING,
+			       "failed to read segment %d, skipping",
+			       segment_number);
 			continue;
+		}
 	}
 
 	return table;
@@ -816,7 +884,8 @@ static struct hashtable *populate_hashtable(const struct nilfs *nilfs)
 
 static bool bucket_has_multiple_items(const struct bucket *bucket)
 {
-	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+	logger(LOG_DEBUG, "%s:%d:%s bucket->count = %d > 1", __FILE__, __LINE__,
+	       __FUNCTION__, bucket->count);
 
 	return bucket->count > 1;
 }
@@ -912,6 +981,8 @@ static void deduplicate_payloads(const struct nilfs *nilfs,
 				 const struct nilfs_vector *payloads)
 {
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+	logger(LOG_INFO, "deduplicating %d payloads",
+	       nilfs_vector_get_size(payloads));
 
 	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
 		const deduplication_payload_t *payload =
@@ -986,7 +1057,8 @@ static void print_deduplication_payloads(const struct nilfs_vector *payloads)
 	logger(LOG_INFO, "deduplication_payloads: {");
 
 	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
-		logger(LOG_INFO, "	struct nilfs_deduplication_payload {");
+		logger(LOG_INFO,
+		       "	struct nilfs_deduplication_payload {");
 		const deduplication_payload_t *payload =
 			nilfs_vector_get_element(payloads, i);
 		logger(LOG_INFO, "		src = {");
@@ -1038,14 +1110,15 @@ static void deduplicate(const struct nilfs *restrict nilfs)
 	hashtable_free((struct hashtable *)crc_table);
 }
 
-int run(const char *restrict device, const struct dedup_options *options)
+int run(const char *dev, const struct dedup_options *options)
 {
+	device = dev;
 	dedup_options = options;
 
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 
-	init_disk_buffer(BUFFER_SIZE);
-	fetch_disk_buffer(device);
+	init_disk_buffer();
+	fetch_disk_buffer(0);
 
 	struct nilfs *fs = nilfs_open_safe(device);
 	nilfs_opt_set_mmap(fs);
