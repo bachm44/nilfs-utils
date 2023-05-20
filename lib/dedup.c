@@ -154,7 +154,7 @@ static void *map_disk_buffer(blocknr_t blocknr, int clear_flag)
 	return disk_buffer[blocknr];
 }
 
-static void fetch_disk_buffer(__off_t sector_start_blocknr)
+static void fetch_disk_buffer(off_t sector_start_blocknr)
 {
 	logger(LOG_DEBUG, "initializing buffer with start blocknr %d",
 	       sector_start_blocknr);
@@ -193,10 +193,10 @@ static void fetch_disk_buffer(__off_t sector_start_blocknr)
 
 static void *fetch_disk_block(blocknr_t blocknr)
 {
-	__off_t sector_next_start_blocknr =
+	off_t sector_next_start_blocknr =
 		(disk_buffer_block_sector + 1) * disk_buffer_size;
 
-	while (blocknr >= (sector_next_start_blocknr)) {
+	while ((off_t)blocknr >= (sector_next_start_blocknr)) {
 		destroy_disk_buffer();
 		init_disk_buffer();
 		fetch_disk_buffer(sector_next_start_blocknr);
