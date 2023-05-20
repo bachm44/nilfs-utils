@@ -102,7 +102,7 @@ taken from sbin/mkfs.c:825-851
 
 typedef uint64_t blocknr_t;
 static void **disk_buffer;
-const static unsigned long disk_buffer_size = 512;
+static const unsigned long disk_buffer_size = 512;
 static unsigned long disk_buffer_block_sector = 0;
 static const char *device;
 
@@ -562,7 +562,7 @@ static void print_item(const struct hashtable_item *item)
 
 static void print_bucket(const struct bucket *bucket)
 {
-	for (int i = 0; i < bucket->count; ++i) {
+	for (uint32_t i = 0; i < bucket->count; ++i) {
 		if (bucket->items[i])
 			print_item(bucket->items[i]);
 	}
@@ -707,7 +707,7 @@ static int populate_hashtable_with_segment_psegment_file_blocks(
 	nilfs_block_for_each(&block, file)
 	{
 		if (block_empty(&block)) {
-			logger(LOG_INFO,
+			logger(LOG_DEBUG,
 			       "skipping empty block with blocknr = %d",
 			       block.blocknr);
 			continue;
@@ -804,7 +804,7 @@ populate_hashtable_with_segment_psegments(const struct nilfs_suinfo *si,
 }
 
 static int populate_hashtable_with_segment(const struct nilfs *nilfs,
-					   size_t segment_number,
+					   __u64 segment_number,
 					   struct hashtable **table)
 {
 	struct nilfs_segment segment;
@@ -847,7 +847,7 @@ static int populate_hashtable_with_segment(const struct nilfs *nilfs,
 	return EXIT_SUCCESS;
 }
 
-static int get_dirty_segments(const struct nilfs *nilfs)
+static __u64 get_dirty_segments(const struct nilfs *nilfs)
 {
 	struct nilfs_sustat sustat;
 	nilfs_get_sustat(nilfs, &sustat);
@@ -858,7 +858,7 @@ static struct hashtable *populate_hashtable(const struct nilfs *nilfs)
 {
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 
-	const int nsegments = get_dirty_segments(nilfs);
+	const __u64 nsegments = get_dirty_segments(nilfs);
 	struct hashtable *table = hashtable_create(BUFFER_SIZE);
 	if (!table) {
 		logger(LOG_ERR, "cannot allocate hashtable: %s",
@@ -866,7 +866,7 @@ static struct hashtable *populate_hashtable(const struct nilfs *nilfs)
 		exit(EXIT_FAILURE);
 	}
 
-	for (size_t segment_number = 0; segment_number < nsegments;
+	for (__u64 segment_number = 0; segment_number < nsegments;
 	     ++segment_number) {
 		const int ret = populate_hashtable_with_segment(
 			nilfs, segment_number, &table);
@@ -1045,7 +1045,7 @@ static void
 print_deduplication_block(const struct nilfs_deduplication_block *block)
 {
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
-	logger(LOG_INFO,
+	logger(LOG_DEBUG,
 	       "				nilfs_deduplication_block = { ino = %ld, blocknr = %ld }",
 	       block->ino, block->blocknr);
 }
@@ -1054,30 +1054,30 @@ static void print_deduplication_payloads(const struct nilfs_vector *payloads)
 {
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 
-	logger(LOG_INFO, "deduplication_payloads: {");
+	logger(LOG_DEBUG, "deduplication_payloads: {");
 
 	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
-		logger(LOG_INFO,
+		logger(LOG_DEBUG,
 		       "	struct nilfs_deduplication_payload {");
 		const deduplication_payload_t *payload =
 			nilfs_vector_get_element(payloads, i);
-		logger(LOG_INFO, "		src = {");
+		logger(LOG_DEBUG, "		src = {");
 		print_deduplication_block(&payload->src);
-		logger(LOG_INFO, "		}");
+		logger(LOG_DEBUG, "		}");
 
-		logger(LOG_INFO, "		dst_count = %ld",
+		logger(LOG_DEBUG, "		dst_count = %ld",
 		       payload->dst_count);
-		logger(LOG_INFO, "		dst = [");
+		logger(LOG_DEBUG, "		dst = [");
 
 		for (size_t j = 0; j < payload->dst_count; ++j) {
 			print_deduplication_block(&payload->dst[j]);
 		}
 
-		logger(LOG_INFO, "		]");
-		logger(LOG_INFO, "	}");
+		logger(LOG_DEBUG, "		]");
+		logger(LOG_DEBUG, "	}");
 	}
 
-	logger(LOG_INFO, "}");
+	logger(LOG_DEBUG, "}");
 }
 
 static void deduplicate(const struct nilfs *restrict nilfs)
