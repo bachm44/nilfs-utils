@@ -13,61 +13,61 @@
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
-#endif	/* HAVE_CONFIG_H */
+#endif /* HAVE_CONFIG_H */
 
 #include <stdio.h>
 
 #if HAVE_STDLIB_H
 #include <stdlib.h>
-#endif	/* HAVE_STDLIB_H */
+#endif /* HAVE_STDLIB_H */
 
 #if HAVE_UNISTD_H
 #include <unistd.h>
-#endif	/* HAVE_UNISTD_H */
+#endif /* HAVE_UNISTD_H */
 
 #if HAVE_ERR_H
 #include <err.h>
-#endif	/* HAVE_ERR_H */
+#endif /* HAVE_ERR_H */
 
 #if HAVE_STRING_H
 #include <string.h>
-#endif	/* HAVE_STRING_H */
+#endif /* HAVE_STRING_H */
 
 #if HAVE_LIMITS_H
 #include <limits.h>
-#endif	/* HAVE_LIMITS_H */
+#endif /* HAVE_LIMITS_H */
 
 #if HAVE_SYS_TYPES_H
 #include <sys/types.h>
-#endif	/* HAVE_SYS_TYPES_H */
+#endif /* HAVE_SYS_TYPES_H */
 
 #if HAVE_FCNTL_H
 #include <fcntl.h>
-#endif	/* HAVE_FCNTL_H */
+#endif /* HAVE_FCNTL_H */
 
 #if HAVE_SYS_STAT_H
 #include <sys/stat.h>
-#endif	/* HAVE_SYS_STAT_H */
+#endif /* HAVE_SYS_STAT_H */
 
 #if HAVE_SYS_TIME_H
 #include <sys/time.h>
-#endif	/* HAVE_SYS_TIME */
+#endif /* HAVE_SYS_TIME */
 
 #if HAVE_TIME_H
 #include <time.h>
-#endif	/* HAVE_TIME_H */
+#endif /* HAVE_TIME_H */
 
 #if HAVE_SYSLOG_H
 #include <syslog.h>
-#endif	/* HAVE_SYSLOG_H */
+#endif /* HAVE_SYSLOG_H */
 
 #if HAVE_MQUEUE_H
 #include <mqueue.h>
-#endif	/* HAVE_MQUEUE_H */
+#endif /* HAVE_MQUEUE_H */
 
 #if HAVE_POLL_H
 #include <poll.h>
-#endif	/* HAVE_POLL_H */
+#endif /* HAVE_POLL_H */
 
 #include <errno.h>
 #include <signal.h>
@@ -76,7 +76,7 @@
 #include <uuid/uuid.h>
 #include "nilfs.h"
 #include "compat.h"
-#include "nilfs2_ondisk.h"	/* NILFS_MIN_NRSVSEGS */
+#include "nilfs2_ondisk.h" /* NILFS_MIN_NRSVSEGS */
 #include "util.h"
 #include "vector.h"
 #include "nilfs_gc.h"
@@ -86,36 +86,34 @@
 #include "cnormap.h"
 #include "realpath.h"
 
-
 #ifndef SYSCONFDIR
-#define SYSCONFDIR		"/etc"
-#endif	/* SYSCONFDIR */
-#define NILFS_CLEANERD_CONFFILE	SYSCONFDIR "/nilfs_cleanerd.conf"
-
+#define SYSCONFDIR "/etc"
+#endif /* SYSCONFDIR */
+#define NILFS_CLEANERD_CONFFILE SYSCONFDIR "/nilfs_cleanerd.conf"
 
 #ifdef _GNU_SOURCE
 #include <getopt.h>
 static const struct option long_option[] = {
-	{"conffile", required_argument, NULL, 'c'},
-	{"help", no_argument, NULL, 'h'},
+	{ "conffile", required_argument, NULL, 'c' },
+	{ "help", no_argument, NULL, 'h' },
 	/* nofork option is obsolete. It does nothing even if passed */
-	{"nofork", no_argument, NULL, 'n'},
-	{"protection-period", required_argument, NULL, 'p'},
-	{"version", no_argument, NULL, 'V'},
-	{NULL, 0, NULL, 0}
+	{ "nofork", no_argument, NULL, 'n' },
+	{ "protection-period", required_argument, NULL, 'p' },
+	{ "version", no_argument, NULL, 'V' },
+	{ NULL, 0, NULL, 0 }
 };
-#define NILFS_CLEANERD_OPTIONS	\
-	"  -c, --conffile\tspecify configuration file\n"	\
-	"  -h, --help    \tdisplay this help and exit\n"	\
+#define NILFS_CLEANERD_OPTIONS                                   \
+	"  -c, --conffile\tspecify configuration file\n"         \
+	"  -h, --help    \tdisplay this help and exit\n"         \
 	"  -p, --protection-period\tspecify protection period\n" \
 	"  -V, --version \tprint version and exit\n"
-#else	/* !_GNU_SOURCE */
-#define NILFS_CLEANERD_OPTIONS	\
-	"  -c            \tspecify configuration file\n"	\
-	"  -h            \tdisplay this help and exit\n"	\
-	"  -p            \tspecify protection period\n"		\
+#else /* !_GNU_SOURCE */
+#define NILFS_CLEANERD_OPTIONS                           \
+	"  -c            \tspecify configuration file\n" \
+	"  -h            \tdisplay this help and exit\n" \
+	"  -p            \tspecify protection period\n"  \
 	"  -V            \tprint version and exit\n"
-#endif	/* _GNU_SOURCE */
+#endif /* _GNU_SOURCE */
 
 /**
  * struct nilfs_cleanerd - nilfs cleaner daemon
@@ -198,8 +196,8 @@ static volatile sig_atomic_t nilfs_cleanerd_dump_req; /* dump request */
 static char nilfs_cleanerd_msgbuf[NILFS_CLEANER_MSG_MAX_REQSZ];
 
 static const char *nilfs_cleaner_cmd_name[] = {
-	"get-status", "run", "suspend", "resume", "tune", "reload", "wait",
-	"stop", "shutdown"
+	"get-status", "run",  "suspend", "resume",  "tune",
+	"reload",     "wait", "stop",	 "shutdown"
 };
 
 static void nilfs_cleanerd_version(const char *progname)
@@ -211,8 +209,7 @@ static void nilfs_cleanerd_usage(const char *progname)
 {
 	fprintf(stderr,
 		"Usage: %s [option]... dev\n"
-		"%s options:\n"
-		NILFS_CLEANERD_OPTIONS,
+		"%s options:\n" NILFS_CLEANERD_OPTIONS,
 		progname, progname);
 }
 
@@ -226,50 +223,50 @@ static void nilfs_cleanerd_dump(struct nilfs_cleanerd *cleanerd)
 	struct timespec ts;
 	int ret;
 
-	syslog(LOG_DEBUG, "============== nilfs_cleanerd dump ==============");
+	syslog(LOG_INFO, "============== nilfs_cleanerd dump ==============");
 	ret = clock_gettime(CLOCK_REALTIME, &ts);
 	if (unlikely(ret < 0))
 		goto skip_current_time;
-	syslog(LOG_DEBUG, "current time: %ld.%09ld", ts.tv_sec, ts.tv_nsec);
+	syslog(LOG_INFO, "current time: %ld.%09ld", ts.tv_sec, ts.tv_nsec);
 
 skip_current_time:
 	ret = clock_gettime(CLOCK_MONOTONIC, &ts);
 	if (unlikely(ret < 0))
 		goto skip_monotonic_clock;
-	syslog(LOG_DEBUG, "monotonic clock: %ld.%09ld", ts.tv_sec, ts.tv_nsec);
+	syslog(LOG_INFO, "monotonic clock: %ld.%09ld", ts.tv_sec, ts.tv_nsec);
 
 skip_monotonic_clock:
-	syslog(LOG_DEBUG, "---------------- cleanerd state -----------------");
-	syslog(LOG_DEBUG, "running: %d", cleanerd->running);
-	syslog(LOG_DEBUG, "fallback: %d", cleanerd->fallback);
-	syslog(LOG_DEBUG, "retry_cleaning: %d", cleanerd->retry_cleaning);
-	syslog(LOG_DEBUG, "no_timeout: %d", cleanerd->no_timeout);
-	syslog(LOG_DEBUG, "shutdown: %d", cleanerd->shutdown);
-	syslog(LOG_DEBUG, "ncleansegs: %ld", cleanerd->ncleansegs);
-	syslog(LOG_DEBUG, "cleaning_interval: %ld.%09ld",
+	syslog(LOG_INFO, "---------------- cleanerd state -----------------");
+	syslog(LOG_INFO, "running: %d", cleanerd->running);
+	syslog(LOG_INFO, "fallback: %d", cleanerd->fallback);
+	syslog(LOG_INFO, "retry_cleaning: %d", cleanerd->retry_cleaning);
+	syslog(LOG_INFO, "no_timeout: %d", cleanerd->no_timeout);
+	syslog(LOG_INFO, "shutdown: %d", cleanerd->shutdown);
+	syslog(LOG_INFO, "ncleansegs: %ld", cleanerd->ncleansegs);
+	syslog(LOG_INFO, "cleaning_interval: %ld.%09ld",
 	       cleanerd->cleaning_interval.tv_sec,
 	       cleanerd->cleaning_interval.tv_nsec);
-	syslog(LOG_DEBUG, "target: %ld.%09ld",
-	       cleanerd->target.tv_sec, cleanerd->target.tv_nsec);
-	syslog(LOG_DEBUG, "timeout: %ld.%09ld",
-	       cleanerd->timeout.tv_sec, cleanerd->timeout.tv_nsec);
-	syslog(LOG_DEBUG, "min_reclaimable_blocks: %lu",
+	syslog(LOG_INFO, "target: %ld.%09ld", cleanerd->target.tv_sec,
+	       cleanerd->target.tv_nsec);
+	syslog(LOG_INFO, "timeout: %ld.%09ld", cleanerd->timeout.tv_sec,
+	       cleanerd->timeout.tv_nsec);
+	syslog(LOG_INFO, "min_reclaimable_blocks: %lu",
 	       cleanerd->min_reclaimable_blocks);
-	syslog(LOG_DEBUG, "prev_nongc_ctime: %llu",
+	syslog(LOG_INFO, "prev_nongc_ctime: %llu",
 	       (unsigned long long)cleanerd->prev_nongc_ctime);
-	syslog(LOG_DEBUG, "mm_prev_state: %d", cleanerd->mm_prev_state);
-	syslog(LOG_DEBUG, "mm_nrestpasses: %d", cleanerd->mm_nrestpasses);
-	syslog(LOG_DEBUG, "mm_nrestsegs: %ld", cleanerd->mm_nrestsegs);
-	syslog(LOG_DEBUG, "mm_ncleansegs: %ld", cleanerd->mm_ncleansegs);
-	syslog(LOG_DEBUG, "mm_protection_period: %ld.%09ld",
+	syslog(LOG_INFO, "mm_prev_state: %d", cleanerd->mm_prev_state);
+	syslog(LOG_INFO, "mm_nrestpasses: %d", cleanerd->mm_nrestpasses);
+	syslog(LOG_INFO, "mm_nrestsegs: %ld", cleanerd->mm_nrestsegs);
+	syslog(LOG_INFO, "mm_ncleansegs: %ld", cleanerd->mm_ncleansegs);
+	syslog(LOG_INFO, "mm_protection_period: %ld.%09ld",
 	       cleanerd->mm_protection_period.tv_sec,
 	       cleanerd->mm_protection_period.tv_nsec);
-	syslog(LOG_DEBUG, "mm_cleaning_interval: %ld.%09ld",
+	syslog(LOG_INFO, "mm_cleaning_interval: %ld.%09ld",
 	       cleanerd->mm_cleaning_interval.tv_sec,
 	       cleanerd->mm_cleaning_interval.tv_nsec);
-	syslog(LOG_DEBUG, "mm_min_reclaimable_blocks: %lu",
+	syslog(LOG_INFO, "mm_min_reclaimable_blocks: %lu",
 	       cleanerd->mm_min_reclaimable_blocks);
-	syslog(LOG_DEBUG, "=================================================");
+	syslog(LOG_INFO, "=================================================");
 }
 
 /**
@@ -282,7 +279,7 @@ static int nilfs_cleanerd_config(struct nilfs_cleanerd *cleanerd,
 	struct nilfs_cldconfig *config = &cleanerd->config;
 	int ret;
 
-	ret = nilfs_cldconfig_read(config, conffile ? : cleanerd->conffile,
+	ret = nilfs_cldconfig_read(config, conffile ?: cleanerd->conffile,
 				   cleanerd->nilfs);
 	if (unlikely(ret < 0))
 		return -1;
@@ -292,7 +289,7 @@ static int nilfs_cleanerd_config(struct nilfs_cleanerd *cleanerd,
 		nilfs_opt_set_mmap(cleanerd->nilfs);
 	else
 		nilfs_opt_clear_mmap(cleanerd->nilfs);
-#endif	/* HAVE_MMAP */
+#endif /* HAVE_MMAP */
 
 	if (config->cf_use_set_suinfo)
 		nilfs_opt_set_set_suinfo(cleanerd->nilfs);
@@ -327,7 +324,7 @@ static int nilfs_cleanerd_reconfig(struct nilfs_cleanerd *cleanerd,
 		cleanerd->ncleansegs = config->cf_nsegments_per_clean;
 		cleanerd->cleaning_interval = config->cf_cleaning_interval;
 		cleanerd->min_reclaimable_blocks =
-				config->cf_min_reclaimable_blocks;
+			config->cf_min_reclaimable_blocks;
 		syslog(LOG_INFO, "configuration file reloaded");
 	}
 	return ret;
@@ -338,10 +335,8 @@ static int nilfs_cleanerd_open_queue(struct nilfs_cleanerd *cleanerd,
 {
 	char nambuf[NAME_MAX - 4];
 	struct stat stbuf;
-	struct mq_attr attr = {
-		.mq_maxmsg = 6,
-		.mq_msgsize = NILFS_CLEANER_MSG_MAX_REQSZ
-	};
+	struct mq_attr attr = { .mq_maxmsg = 6,
+				.mq_msgsize = NILFS_CLEANER_MSG_MAX_REQSZ };
 	int ret;
 
 	cleanerd->recvq = -1;
@@ -355,8 +350,7 @@ static int nilfs_cleanerd_open_queue(struct nilfs_cleanerd *cleanerd,
 		goto failed;
 
 	if (S_ISBLK(stbuf.st_mode)) {
-		ret = snprintf(nambuf, sizeof(nambuf),
-			       "/nilfs-cleanerq-%llu",
+		ret = snprintf(nambuf, sizeof(nambuf), "/nilfs-cleanerq-%llu",
 			       (unsigned long long)stbuf.st_rdev);
 	} else if (S_ISREG(stbuf.st_mode) || S_ISDIR(stbuf.st_mode)) {
 		ret = snprintf(nambuf, sizeof(nambuf),
@@ -374,8 +368,8 @@ static int nilfs_cleanerd_open_queue(struct nilfs_cleanerd *cleanerd,
 	if (unlikely(!cleanerd->recvq_name))
 		goto failed;
 
-	cleanerd->recvq = mq_open(nambuf, O_RDONLY | O_CREAT | O_NONBLOCK,
-				  0600, &attr);
+	cleanerd->recvq =
+		mq_open(nambuf, O_RDONLY | O_CREAT | O_NONBLOCK, 0600, &attr);
 	if (unlikely(cleanerd->recvq < 0)) {
 		free(cleanerd->recvq_name);
 		goto failed;
@@ -406,8 +400,8 @@ static void nilfs_cleanerd_close_queue(struct nilfs_cleanerd *cleanerd)
 }
 
 #ifndef PATH_MAX
-#define PATH_MAX	8192
-#endif	/* PATH_MAX */
+#define PATH_MAX 8192
+#endif /* PATH_MAX */
 
 static __attribute__((noinline)) char *get_canonical_path(const char *path)
 {
@@ -435,9 +429,8 @@ nilfs_cleanerd_create(const char *dev, const char *dir, const char *conffile)
 
 	memset(cleanerd, 0, sizeof(*cleanerd));
 
-	cleanerd->nilfs = nilfs_open(dev, dir,
-				       NILFS_OPEN_RAW | NILFS_OPEN_RDWR |
-				       NILFS_OPEN_GCLK);
+	cleanerd->nilfs = nilfs_open(
+		dev, dir, NILFS_OPEN_RAW | NILFS_OPEN_RDWR | NILFS_OPEN_GCLK);
 	if (unlikely(cleanerd->nilfs == NULL)) {
 		syslog(LOG_ERR, "cannot open nilfs on %s: %m", dev);
 		goto out_cleanerd;
@@ -450,7 +443,7 @@ nilfs_cleanerd_create(const char *dev, const char *dir, const char *conffile)
 		goto out_nilfs;
 	}
 
-	cleanerd->conffile = strdup(conffile ? : NILFS_CLEANERD_CONFFILE);
+	cleanerd->conffile = strdup(conffile ?: NILFS_CLEANERD_CONFFILE);
 	if (unlikely(cleanerd->conffile == NULL))
 		goto out_cnormap;
 
@@ -507,32 +500,29 @@ static int nilfs_cleanerd_automatic_suspend(struct nilfs_cleanerd *cleanerd)
 
 static long nilfs_cleanerd_ncleansegs(struct nilfs_cleanerd *cleanerd)
 {
-	return cleanerd->running == 2 ?
-		cleanerd->mm_ncleansegs : cleanerd->ncleansegs;
+	return cleanerd->running == 2 ? cleanerd->mm_ncleansegs :
+					cleanerd->ncleansegs;
 }
 
 static struct timespec *
 nilfs_cleanerd_cleaning_interval(struct nilfs_cleanerd *cleanerd)
 {
-	return cleanerd->running == 2 ?
-		&cleanerd->mm_cleaning_interval :
-		&cleanerd->cleaning_interval;
+	return cleanerd->running == 2 ? &cleanerd->mm_cleaning_interval :
+					&cleanerd->cleaning_interval;
 }
 
 static struct timespec *
 nilfs_cleanerd_protection_period(struct nilfs_cleanerd *cleanerd)
 {
-	return cleanerd->running == 2 ?
-		&cleanerd->mm_protection_period :
-		&cleanerd->config.cf_protection_period;
+	return cleanerd->running == 2 ? &cleanerd->mm_protection_period :
+					&cleanerd->config.cf_protection_period;
 }
 
 static unsigned long
 nilfs_cleanerd_min_reclaimable_blocks(struct nilfs_cleanerd *cleanerd)
 {
-	return cleanerd->running == 2 ?
-		cleanerd->mm_min_reclaimable_blocks :
-		cleanerd->min_reclaimable_blocks;
+	return cleanerd->running == 2 ? cleanerd->mm_min_reclaimable_blocks :
+					cleanerd->min_reclaimable_blocks;
 }
 
 static void
@@ -541,7 +531,7 @@ nilfs_cleanerd_reduce_ncleansegs_for_retry(struct nilfs_cleanerd *cleanerd)
 	if (cleanerd->running == 2) {
 		if (cleanerd->ncleansegs > 1)
 			cleanerd->ncleansegs >>= 1;
-	} else  {
+	} else {
 		if (cleanerd->mm_ncleansegs > 1)
 			cleanerd->mm_ncleansegs >>= 1;
 	}
@@ -602,13 +592,14 @@ static int nilfs_shrink_protected_region(struct nilfs *nilfs)
  * @prottimep: place to store lower limit of protected period
  * @oldestp: place to store the oldest mod-time
  */
-#define NILFS_CLEANERD_NSUINFO	512
+#define NILFS_CLEANERD_NSUINFO 512
 #define NILFS_CLEANERD_NULLTIME INT64_MAX
 
-static ssize_t
-nilfs_cleanerd_select_segments(struct nilfs_cleanerd *cleanerd,
-			       struct nilfs_sustat *sustat, uint64_t *segnums,
-			       int64_t *prottimep, int64_t *oldestp)
+static ssize_t nilfs_cleanerd_select_segments(struct nilfs_cleanerd *cleanerd,
+					      struct nilfs_sustat *sustat,
+					      uint64_t *segnums,
+					      int64_t *prottimep,
+					      int64_t *oldestp)
 {
 	struct nilfs *nilfs;
 	struct nilfs_vector *smv;
@@ -708,7 +699,7 @@ nilfs_cleanerd_select_segments(struct nilfs_cleanerd *cleanerd,
 	*prottimep = prottime;
 	*oldestp = oldest;
 
- out:
+out:
 	nilfs_vector_destroy(smv);
 	return nssegs;
 }
@@ -731,15 +722,15 @@ static int oom_adjust(void)
 
 	fd = open(path, O_WRONLY);
 	if (unlikely(fd < 0)) {
-		syslog(LOG_WARNING,
-		       "can't adjust oom-killer's pardon %s: %m", path);
+		syslog(LOG_WARNING, "can't adjust oom-killer's pardon %s: %m",
+		       path);
 		return -1;
 	}
 
 	err = write(fd, score, strlen(score));
 	if (unlikely(err < 0)) {
-		syslog(LOG_WARNING,
-		       "can't adjust oom-killer's pardon %s: %m", path);
+		syslog(LOG_WARNING, "can't adjust oom-killer's pardon %s: %m",
+		       path);
 		close(fd);
 		return -1;
 	}
@@ -747,8 +738,8 @@ static int oom_adjust(void)
 	return 0;
 }
 
-#define DEVNULL	"/dev/null"
-#define ROOTDIR	"/"
+#define DEVNULL "/dev/null"
+#define ROOTDIR "/"
 
 static int daemonize(int nochdir, int noclose)
 {
@@ -981,8 +972,8 @@ static int nilfs_cleanerd_recalc_interval(struct nilfs_cleanerd *cleanerd,
 			pt.tv_sec = tgt > prottime ? tgt - prottime + 1 : 1;
 			pt.tv_nsec = 0;
 		}
-		if (timespeccmp(&pt,
-				&cleanerd->config.cf_clean_check_interval, <))
+		if (timespeccmp(&pt, &cleanerd->config.cf_clean_check_interval,
+				<))
 			cleanerd->timeout =
 				cleanerd->config.cf_clean_check_interval;
 		else
@@ -1000,7 +991,7 @@ static int nilfs_cleanerd_recalc_interval(struct nilfs_cleanerd *cleanerd,
 		timespecadd(&curr, &cleanerd->config.cf_retry_interval,
 			    &cleanerd->target);
 		timespecsub(&cleanerd->target, &curr, &cleanerd->timeout);
-		syslog(LOG_DEBUG, "retry interval");
+		syslog(LOG_INFO, "retry interval");
 		return 0;
 	}
 
@@ -1010,7 +1001,7 @@ static int nilfs_cleanerd_recalc_interval(struct nilfs_cleanerd *cleanerd,
 	if (!timespeccmp(&curr, &cleanerd->target, <) || cleanerd->no_timeout) {
 		timespecclear(&cleanerd->timeout);
 		timespecadd(&curr, interval, &cleanerd->target);
-		syslog(LOG_DEBUG, "adjust interval");
+		syslog(LOG_INFO, "adjust interval");
 		return 0;
 	}
 	timespecsub(&cleanerd->target, &curr, &cleanerd->timeout);
@@ -1030,8 +1021,8 @@ static int nilfs_cleanerd_respond(struct nilfs_cleanerd *cleanerd,
 		char uuidbuf[36 + 1];
 
 		uuid_unparse_lower(req->client_uuid, uuidbuf);
-		ret = snprintf(nambuf, sizeof(nambuf),
-			       "/nilfs-cleanerq-%s", uuidbuf);
+		ret = snprintf(nambuf, sizeof(nambuf), "/nilfs-cleanerq-%s",
+			       uuidbuf);
 		if (unlikely(ret < 0))
 			goto out;
 
@@ -1052,7 +1043,7 @@ static int nilfs_cleanerd_respond(struct nilfs_cleanerd *cleanerd,
 	} else {
 		if (req->cmd >= 0 &&
 		    req->cmd < ARRAY_SIZE(nilfs_cleaner_cmd_name))
-			syslog(LOG_DEBUG, "command %s %s",
+			syslog(LOG_INFO, "command %s %s",
 			       nilfs_cleaner_cmd_name[req->cmd],
 			       res->result ? "nacked" : "acked");
 	}
@@ -1061,12 +1052,10 @@ out:
 }
 
 static int nilfs_cleanerd_nak(struct nilfs_cleanerd *cleanerd,
-			      struct nilfs_cleaner_request *req,
-			      int errcode)
+			      struct nilfs_cleaner_request *req, int errcode)
 {
-	struct nilfs_cleaner_response res = {
-		.result = NILFS_CLEANER_RSP_NACK,  .err = errcode
-	};
+	struct nilfs_cleaner_response res = { .result = NILFS_CLEANER_RSP_NACK,
+					      .err = errcode };
 	return nilfs_cleanerd_respond(cleanerd, req, &res);
 }
 
@@ -1074,7 +1063,7 @@ static int nilfs_cleanerd_cmd_getstat(struct nilfs_cleanerd *cleanerd,
 				      struct nilfs_cleaner_request *req,
 				      size_t argsize)
 {
-	struct nilfs_cleaner_response res = {0};
+	struct nilfs_cleaner_response res = { 0 };
 
 	if (cleanerd->running == 0)
 		res.status = NILFS_CLEANER_STATUS_IDLE;
@@ -1092,7 +1081,7 @@ static int nilfs_cleanerd_cmd_run(struct nilfs_cleanerd *cleanerd,
 				  size_t argsize)
 {
 	struct nilfs_cleaner_request_with_args *req2;
-	struct nilfs_cleaner_response res = {0};
+	struct nilfs_cleaner_response res = { 0 };
 
 	if (argsize < sizeof(req2->args))
 		goto error_inval;
@@ -1115,7 +1104,7 @@ static int nilfs_cleanerd_cmd_run(struct nilfs_cleanerd *cleanerd,
 	if (req2->args.valid & NILFS_CLEANER_ARG_NSEGMENTS_PER_CLEAN) {
 		if (req2->args.nsegments_per_clean == 0 ||
 		    req2->args.nsegments_per_clean >
-		    NILFS_CLDCONFIG_NSEGMENTS_PER_CLEAN_MAX)
+			    NILFS_CLDCONFIG_NSEGMENTS_PER_CLEAN_MAX)
 			goto error_inval;
 		cleanerd->mm_ncleansegs = req2->args.nsegments_per_clean;
 	} else {
@@ -1128,15 +1117,14 @@ static int nilfs_cleanerd_cmd_run(struct nilfs_cleanerd *cleanerd,
 		cleanerd->mm_cleaning_interval.tv_nsec =
 			req2->args.cleaning_interval_nsec;
 	} else {
-		cleanerd->mm_cleaning_interval =
-			cleanerd->cleaning_interval;
+		cleanerd->mm_cleaning_interval = cleanerd->cleaning_interval;
 	}
 	/* minimal reclaimable blocks */
 	if (req2->args.valid & NILFS_CLEANER_ARG_MIN_RECLAIMABLE_BLOCKS) {
 		switch (req2->args.min_reclaimable_blocks_unit) {
 		case NILFS_CLEANER_ARG_UNIT_NONE:
 			if (req2->args.min_reclaimable_blocks >
-				nilfs_get_blocks_per_segment(cleanerd->nilfs))
+			    nilfs_get_blocks_per_segment(cleanerd->nilfs))
 				goto error_inval;
 
 			cleanerd->mm_min_reclaimable_blocks =
@@ -1148,8 +1136,10 @@ static int nilfs_cleanerd_cmd_run(struct nilfs_cleanerd *cleanerd,
 
 			cleanerd->mm_min_reclaimable_blocks =
 				(req2->args.min_reclaimable_blocks *
-				nilfs_get_blocks_per_segment(cleanerd->nilfs) +
-				99) / 100;
+					 nilfs_get_blocks_per_segment(
+						 cleanerd->nilfs) +
+				 99) /
+				100;
 			break;
 		default:
 			goto error_inval;
@@ -1184,7 +1174,7 @@ static int nilfs_cleanerd_cmd_suspend(struct nilfs_cleanerd *cleanerd,
 				      struct nilfs_cleaner_request *req,
 				      size_t argsize)
 {
-	struct nilfs_cleaner_response res = {0};
+	struct nilfs_cleaner_response res = { 0 };
 
 	if (cleanerd->running != -1)
 		nilfs_cleanerd_manual_suspend(cleanerd);
@@ -1196,7 +1186,7 @@ static int nilfs_cleanerd_cmd_resume(struct nilfs_cleanerd *cleanerd,
 				     struct nilfs_cleaner_request *req,
 				     size_t argsize)
 {
-	struct nilfs_cleaner_response res = {0};
+	struct nilfs_cleaner_response res = { 0 };
 
 	if (cleanerd->running == -1)
 		nilfs_cleanerd_manual_resume(cleanerd);
@@ -1217,7 +1207,7 @@ static int nilfs_cleanerd_cmd_reload(struct nilfs_cleanerd *cleanerd,
 				     size_t argsize)
 {
 	struct nilfs_cleaner_request_with_path *req2;
-	struct nilfs_cleaner_response res = {0};
+	struct nilfs_cleaner_response res = { 0 };
 	char *conffile;
 
 	req2 = (struct nilfs_cleaner_request_with_path *)req;
@@ -1225,7 +1215,7 @@ static int nilfs_cleanerd_cmd_reload(struct nilfs_cleanerd *cleanerd,
 		conffile = NULL;
 	} else if (strnlen(req2->pathname, argsize) < argsize) {
 		conffile = req2->pathname;
-	} else  {
+	} else {
 		res.result = NILFS_CLEANER_RSP_NACK;
 		res.err = EINVAL;
 		goto out_send;
@@ -1252,7 +1242,7 @@ static int nilfs_cleanerd_cmd_stop(struct nilfs_cleanerd *cleanerd,
 				   struct nilfs_cleaner_request *req,
 				   size_t argsize)
 {
-	struct nilfs_cleaner_response res = {0};
+	struct nilfs_cleaner_response res = { 0 };
 
 	if (cleanerd->running == 2 || cleanerd->running == -1)
 		nilfs_cleanerd_manual_stop(cleanerd);
@@ -1264,7 +1254,7 @@ static int nilfs_cleanerd_cmd_shutdown(struct nilfs_cleanerd *cleanerd,
 				       struct nilfs_cleaner_request *req,
 				       size_t argsize)
 {
-	struct nilfs_cleaner_response res = {0};
+	struct nilfs_cleaner_response res = { 0 };
 
 	cleanerd->shutdown = 1;
 	res.result = NILFS_CLEANER_RSP_ACK;
@@ -1285,7 +1275,7 @@ static int nilfs_cleanerd_handle_message(struct nilfs_cleanerd *cleanerd,
 	argsize = bytes - sizeof(*req);
 
 	if (req->cmd >= 0 && req->cmd < ARRAY_SIZE(nilfs_cleaner_cmd_name))
-		syslog(LOG_DEBUG, "received %s command",
+		syslog(LOG_INFO, "received %s command",
 		       nilfs_cleaner_cmd_name[req->cmd]);
 
 	switch (req->cmd) {
@@ -1317,7 +1307,7 @@ static int nilfs_cleanerd_handle_message(struct nilfs_cleanerd *cleanerd,
 		ret = nilfs_cleanerd_cmd_shutdown(cleanerd, req, argsize);
 		break;
 	default:
-		syslog(LOG_DEBUG, "received unknown command: %d", req->cmd);
+		syslog(LOG_INFO, "received unknown command: %d", req->cmd);
 		return nilfs_cleanerd_nak(cleanerd, req, EINVAL);
 	}
 out:
@@ -1330,8 +1320,8 @@ static int nilfs_cleanerd_wait(struct nilfs_cleanerd *cleanerd)
 	ssize_t bytes;
 	int ret;
 
-	syslog(LOG_DEBUG, "wait %ld.%09ld",
-	       cleanerd->timeout.tv_sec, cleanerd->timeout.tv_nsec);
+	syslog(LOG_INFO, "wait %ld.%09ld", cleanerd->timeout.tv_sec,
+	       cleanerd->timeout.tv_nsec);
 
 	memset(&pfd, 0, sizeof(pfd));
 	pfd.fd = cleanerd->recvq;
@@ -1348,18 +1338,18 @@ static int nilfs_cleanerd_wait(struct nilfs_cleanerd *cleanerd)
 	}
 
 	if (!(pfd.revents & POLLIN)) {
-		syslog(LOG_DEBUG, "wake up (timed out)");
+		syslog(LOG_INFO, "wake up (timed out)");
 		goto out;
 	}
-	syslog(LOG_DEBUG, "wake up to handle message");
+	syslog(LOG_INFO, "wake up to handle message");
 
 	bytes = mq_receive(cleanerd->recvq, nilfs_cleanerd_msgbuf,
 			   sizeof(nilfs_cleanerd_msgbuf), NULL);
 	if (unlikely(bytes < 0)) {
 		if (errno == EINTR || errno == EAGAIN) {
 			syslog(LOG_INFO, "mq_receive aborted: %s",
-			       errno == EINTR ?
-			       "interrupted" : "no message found");
+			       errno == EINTR ? "interrupted" :
+						"no message found");
 		} else {
 			syslog(LOG_ERR, "mq_receive failed: %m");
 			return -1;
@@ -1384,8 +1374,8 @@ static int nilfs_cleanerd_handle_clean_check(struct nilfs_cleanerd *cleanerd,
 					     struct nilfs_sustat *sustat)
 {
 	struct nilfs_cldconfig *config = &cleanerd->config;
-	uint64_t r_segments = nilfs_get_reserved_segments(cleanerd->nilfs,
-						       sustat->ss_nsegs);
+	uint64_t r_segments =
+		nilfs_get_reserved_segments(cleanerd->nilfs, sustat->ss_nsegs);
 
 	if (cleanerd->running == 1) {
 		/* running (automatic suspend mode) */
@@ -1409,13 +1399,13 @@ static int nilfs_cleanerd_handle_clean_check(struct nilfs_cleanerd *cleanerd,
 		cleanerd->ncleansegs = config->cf_mc_nsegments_per_clean;
 		cleanerd->cleaning_interval = config->cf_mc_cleaning_interval;
 		cleanerd->min_reclaimable_blocks =
-				config->cf_mc_min_reclaimable_blocks;
+			config->cf_mc_min_reclaimable_blocks;
 	} else {
 		/* continue to run */
 		cleanerd->ncleansegs = config->cf_nsegments_per_clean;
 		cleanerd->cleaning_interval = config->cf_cleaning_interval;
 		cleanerd->min_reclaimable_blocks =
-				config->cf_min_reclaimable_blocks;
+			config->cf_min_reclaimable_blocks;
 	}
 
 	return 0; /* do gc */
@@ -1525,7 +1515,7 @@ static int nilfs_cleanerd_clean_segments(struct nilfs_cleanerd *cleanerd,
 		       NILFS_RECLAIM_PARAM_PROTCNO |
 		       NILFS_RECLAIM_PARAM_MIN_RECLAIMABLE_BLKS;
 	params.min_reclaimable_blks =
-			nilfs_cleanerd_min_reclaimable_blocks(cleanerd);
+		nilfs_cleanerd_min_reclaimable_blocks(cleanerd);
 	params.protseq = protseq;
 
 	pt = nilfs_cleanerd_protection_period(cleanerd);
@@ -1538,7 +1528,7 @@ static int nilfs_cleanerd_clean_segments(struct nilfs_cleanerd *cleanerd,
 		       (unsigned long long)pt->tv_sec);
 		goto out;
 	}
-	syslog(LOG_DEBUG, "got cno %llu from protection period %lu",
+	syslog(LOG_INFO, "got cno %llu from protection period %lu",
 	       (unsigned long long)params.protcno, (unsigned long)pt->tv_sec);
 
 	memset(&stat, 0, sizeof(stat));
@@ -1558,7 +1548,7 @@ static int nilfs_cleanerd_clean_segments(struct nilfs_cleanerd *cleanerd,
 
 	if (stat.cleaned_segs > 0) {
 		for (i = 0; i < stat.cleaned_segs; i++)
-			syslog(LOG_DEBUG, "segment %llu cleaned",
+			syslog(LOG_INFO, "segment %llu cleaned",
 			       (unsigned long long)segnums[i]);
 
 		nilfs_cleanerd_progress(cleanerd, stat.cleaned_segs);
@@ -1571,7 +1561,7 @@ static int nilfs_cleanerd_clean_segments(struct nilfs_cleanerd *cleanerd,
 	if (stat.deferred_segs > 0) {
 		sumsegs = stat.cleaned_segs + stat.deferred_segs;
 		for (i = stat.cleaned_segs; i < sumsegs; i++)
-			syslog(LOG_DEBUG, "segment %llu deferred",
+			syslog(LOG_INFO, "segment %llu deferred",
 			       (unsigned long long)segnums[i]);
 
 		nilfs_cleanerd_progress(cleanerd, stat.deferred_segs);
@@ -1585,14 +1575,13 @@ static int nilfs_cleanerd_clean_segments(struct nilfs_cleanerd *cleanerd,
 	}
 
 	if (*ndone == 0) {
-		syslog(LOG_DEBUG, "no segments cleaned");
+		syslog(LOG_INFO, "no segments cleaned");
 
 		if (!cleanerd->retry_cleaning &&
-		    nilfs_segments_still_reclaimable(
-			    cleanerd->nilfs, segnums, nsegs, protseq) &&
+		    nilfs_segments_still_reclaimable(cleanerd->nilfs, segnums,
+						     nsegs, protseq) &&
 		    nilfs_shrink_protected_region(cleanerd->nilfs) == 0) {
-
-			syslog(LOG_DEBUG, "retrying protected region");
+			syslog(LOG_INFO, "retrying protected region");
 			cleanerd->retry_cleaning = 1;
 		} else {
 			cleanerd->retry_cleaning = 0;
@@ -1642,8 +1631,7 @@ static int nilfs_cleanerd_clean_loop(struct nilfs_cleanerd *cleanerd)
 	cleanerd->ncleansegs = cleanerd->config.cf_nsegments_per_clean;
 	cleanerd->cleaning_interval = cleanerd->config.cf_cleaning_interval;
 	cleanerd->min_reclaimable_blocks =
-			cleanerd->config.cf_min_reclaimable_blocks;
-
+		cleanerd->config.cf_min_reclaimable_blocks;
 
 	if (nilfs_cleanerd_automatic_suspend(cleanerd))
 		nilfs_cleanerd_clean_check_pause(cleanerd);
@@ -1669,22 +1657,23 @@ static int nilfs_cleanerd_clean_loop(struct nilfs_cleanerd *cleanerd)
 			goto sleep;
 
 		/* starts garbage collection */
-		syslog(LOG_DEBUG, "ncleansegs = %llu",
+		syslog(LOG_INFO, "ncleansegs = %llu",
 		       (unsigned long long)sustat.ss_ncleansegs);
 
-		ns = nilfs_cleanerd_select_segments(
-			cleanerd, &sustat, segnums, &prottime, &oldest);
+		ns = nilfs_cleanerd_select_segments(cleanerd, &sustat, segnums,
+						    &prottime, &oldest);
 		if (unlikely(ns < 0)) {
 			syslog(LOG_ERR, "cannot select segments: %m");
 			return -1;
 		}
-		syslog(LOG_DEBUG, "%d segment%s selected to be cleaned",
-		       ns, (ns <= 1) ? "" : "s");
+		syslog(LOG_INFO, "%d segment%s selected to be cleaned", ns,
+		       (ns <= 1) ? "" : "s");
 		ndone = 0;
 		if (ns > 0) {
-			ret = nilfs_cleanerd_clean_segments(
-				cleanerd, segnums, ns, sustat.ss_prot_seq,
-				&ndone);
+			ret = nilfs_cleanerd_clean_segments(cleanerd, segnums,
+							    ns,
+							    sustat.ss_prot_seq,
+							    &ndone);
 			if (unlikely(ret < 0))
 				return -1;
 		} else {
@@ -1692,8 +1681,8 @@ static int nilfs_cleanerd_clean_loop(struct nilfs_cleanerd *cleanerd)
 		}
 		/* done */
 
-		ret = nilfs_cleanerd_recalc_interval(
-			cleanerd, ns, ndone, prottime, oldest);
+		ret = nilfs_cleanerd_recalc_interval(cleanerd, ns, ndone,
+						     prottime, oldest);
 		if (unlikely(ret < 0))
 			return -1;
 
@@ -1719,10 +1708,10 @@ int main(int argc, char *argv[])
 	int status, c, ret;
 #ifdef _GNU_SOURCE
 	int option_index;
-#endif	/* _GNU_SOURCE */
+#endif /* _GNU_SOURCE */
 
-	progname = (strrchr(argv[0], '/') != NULL) ?
-		strrchr(argv[0], '/') + 1 : argv[0];
+	progname = (strrchr(argv[0], '/') != NULL) ? strrchr(argv[0], '/') + 1 :
+						     argv[0];
 	conffile = NILFS_CLEANERD_CONFFILE;
 	status = EXIT_SUCCESS;
 	protection_period = ULONG_MAX;
@@ -1730,11 +1719,11 @@ int main(int argc, char *argv[])
 	dir = NULL;
 
 #ifdef _GNU_SOURCE
-	while ((c = getopt_long(argc, argv, "c:hnp:V",
-				long_option, &option_index)) >= 0) {
-#else	/* !_GNU_SOURCE */
+	while ((c = getopt_long(argc, argv, "c:hnp:V", long_option,
+				&option_index)) >= 0) {
+#else /* !_GNU_SOURCE */
 	while ((c = getopt(argc, argv, "c:hnp:V")) >= 0) {
-#endif	/* _GNU_SOURCE */
+#endif /* _GNU_SOURCE */
 
 		switch (c) {
 		case 'c':
@@ -1798,8 +1787,7 @@ int main(int argc, char *argv[])
 
 	ret = oom_adjust();
 	if (unlikely(ret < 0))
-		syslog(LOG_WARNING,
-		       "adjusting the OOM killer failed: %m");
+		syslog(LOG_WARNING, "adjusting the OOM killer failed: %m");
 
 	nilfs_cleanerd = nilfs_cleanerd_create(dev, dir, conffile);
 	if (unlikely(nilfs_cleanerd == NULL)) {
@@ -1821,7 +1809,7 @@ out_close_log:
 	closelog();
 
 out_free:
-	free(dir);	/* free(NULL) is just ignored */
+	free(dir); /* free(NULL) is just ignored */
 	free(dev);
 
 	exit(status);
