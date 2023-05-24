@@ -868,6 +868,9 @@ static struct hashtable *populate_hashtable(const struct nilfs *nilfs)
 
 	for (__u64 segment_number = 0; segment_number < nsegments;
 	     ++segment_number) {
+		logger(LOG_INFO, "populating hashtable with segment %d of %d",
+		       segment_number, nsegments);
+
 		const int ret = populate_hashtable_with_segment(
 			nilfs, segment_number, &table);
 
@@ -985,6 +988,10 @@ static void deduplicate_payloads(const struct nilfs *nilfs,
 	       nilfs_vector_get_size(payloads));
 
 	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
+		if (i % 100 == 0)
+			logger(LOG_INFO, "Deduplicating payload %d of %d", i,
+			       nilfs_vector_get_size(payloads));
+
 		const deduplication_payload_t *payload =
 			nilfs_vector_get_element(payloads, i);
 
