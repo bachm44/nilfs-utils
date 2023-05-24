@@ -669,15 +669,15 @@ static ssize_t nilfs_cleanerd_select_segments(struct nilfs_cleanerd *cleanerd,
 			if (imp < thr) {
 				if (lastmod < oldest)
 					oldest = lastmod;
-				// if (lastmod < prottime || lastmod > now) {
-				sm = nilfs_vector_get_new_element(smv);
-				if (unlikely(sm == NULL)) {
-					nssegs = -1;
-					goto out;
+				if (lastmod < prottime || lastmod > now) {
+					sm = nilfs_vector_get_new_element(smv);
+					if (unlikely(sm == NULL)) {
+						nssegs = -1;
+						goto out;
+					}
+					sm->si_segnum = segnum + i;
+					sm->si_importance = imp;
 				}
-				sm->si_segnum = segnum + i;
-				sm->si_importance = imp;
-				// }
 			}
 		}
 		if (unlikely(n == 0)) {
