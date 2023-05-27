@@ -1617,7 +1617,7 @@ static int nilfs_cleanerd_clean_loop(struct nilfs_cleanerd *cleanerd)
 		return -1;
 
 	nilfs_cleanerd_reload_config = 0;
-	nilfs_cleanerd_dump_req = 0;
+	nilfs_cleanerd_dump_req = 1;
 
 	cleanerd->running = 1;
 	cleanerd->fallback = 0;
@@ -1795,7 +1795,6 @@ int main(int argc, char *argv[])
 		status = EXIT_FAILURE;
 		goto out_close_log;
 	}
-	nilfs_cleanerd_dump(nilfs_cleanerd);
 	if (!sigsetjmp(nilfs_cleanerd_env, 1)) {
 		ret = nilfs_cleanerd_clean_loop(nilfs_cleanerd);
 		if (unlikely(ret < 0))
