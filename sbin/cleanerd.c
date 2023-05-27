@@ -1637,7 +1637,6 @@ static int nilfs_cleanerd_clean_loop(struct nilfs_cleanerd *cleanerd)
 		nilfs_cleanerd_clean_check_pause(cleanerd);
 
 	while (!cleanerd->shutdown) {
-		nilfs_cleanerd_dump(cleanerd);
 		cleanerd->no_timeout = 0;
 
 		ret = sigprocmask(SIG_BLOCK, &sigset, NULL);
@@ -1796,6 +1795,7 @@ int main(int argc, char *argv[])
 		status = EXIT_FAILURE;
 		goto out_close_log;
 	}
+
 	if (!sigsetjmp(nilfs_cleanerd_env, 1)) {
 		ret = nilfs_cleanerd_clean_loop(nilfs_cleanerd);
 		if (unlikely(ret < 0))
