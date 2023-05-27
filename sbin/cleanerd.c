@@ -1795,7 +1795,7 @@ int main(int argc, char *argv[])
 		status = EXIT_FAILURE;
 		goto out_close_log;
 	}
-
+	nilfs_cleanerd_dump(nilfs_cleanerd);
 	if (!sigsetjmp(nilfs_cleanerd_env, 1)) {
 		ret = nilfs_cleanerd_clean_loop(nilfs_cleanerd);
 		if (unlikely(ret < 0))
