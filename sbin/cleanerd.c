@@ -1617,7 +1617,7 @@ static int nilfs_cleanerd_clean_loop(struct nilfs_cleanerd *cleanerd)
 		return -1;
 
 	nilfs_cleanerd_reload_config = 0;
-	nilfs_cleanerd_dump_req = 1;
+	nilfs_cleanerd_dump_req = 0;
 
 	cleanerd->running = 1;
 	cleanerd->fallback = 0;
@@ -1637,6 +1637,7 @@ static int nilfs_cleanerd_clean_loop(struct nilfs_cleanerd *cleanerd)
 		nilfs_cleanerd_clean_check_pause(cleanerd);
 
 	while (!cleanerd->shutdown) {
+		nilfs_cleanerd_dump(cleanerd);
 		cleanerd->no_timeout = 0;
 
 		ret = sigprocmask(SIG_BLOCK, &sigset, NULL);
