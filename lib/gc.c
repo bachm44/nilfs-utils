@@ -778,6 +778,7 @@ int nilfs_xreclaim_segment(struct nilfs *nilfs,
 	if ((params->flags & NILFS_RECLAIM_PARAM_MIN_RECLAIMABLE_BLKS) &&
 			nilfs_opt_test_set_suinfo(nilfs) &&
 			reclaimable_blocks < params->min_reclaimable_blks * n) {
+		nilfs_gc_logger(LOG_INFO, "RECLAIM_PARAM: min_reclaimable_blks * n = %d, reclaimable_blocks = %d", params->min_reclaimable_blks * n, reclaimable_blocks);
 		if (stat) {
 			stat->deferred_segs = n;
 			stat->cleaned_segs = 0;
