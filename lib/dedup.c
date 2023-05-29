@@ -102,7 +102,7 @@ taken from sbin/mkfs.c:825-851
 
 typedef uint64_t blocknr_t;
 static void **disk_buffer;
-static const unsigned long disk_buffer_size = 512;
+static const unsigned long disk_buffer_size = 1024;
 static unsigned long disk_buffer_block_sector = 0;
 static const char *device;
 
