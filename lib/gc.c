@@ -161,6 +161,7 @@ static int nilfs_acc_blocks_file(struct nilfs_file *file,
 					le64_to_cpu(*(__le64 *)blk.binfo);
 				vdesc->vd_flags = 1;	/* node */
 			}
+			vdesc->vd_is_deletable = 1;
 		}
 	}
 	return 0;
@@ -337,8 +338,18 @@ static int nilfs_get_vdesc(struct nilfs *nilfs, struct nilfs_vector *vdescv)
 			return -1;
 		for (j = 0; j < n; j++) {
 			vdesc = nilfs_vector_get_element(vdescv, i + j);
-			assert((vdesc != NULL) &&
-			       (vdesc->vd_vblocknr == vinfo[j].vi_vblocknr));
+			assert(vdesc);
+
+			// Deduplicated destination block
+			if (vinfo[j].vi_vblocknr == 0 && vinfo[j].vi_blocknr == 0) {
+				vdesc->vd_is_deletable = 0;
+				continue;
+			}
+			else  {
+				vdesc->vd_is_deletable = 1;
+			}
+
+			assert((vdesc->vd_vblocknr == vinfo[j].vi_vblocknr));
 			vdesc->vd_period.p_start = vinfo[j].vi_start;
 			vdesc->vd_period.p_end = vinfo[j].vi_end;
 		}
@@ -422,6 +433,9 @@ static int nilfs_vdesc_is_live(const struct nilfs_vdesc *vdesc,
 			       size_t n, nilfs_cno_t *last_hit)
 {
 	long low, high, index;
+
+	if (!vdesc->vd_is_deletable)
+		return 1;
 
 	if (vdesc->vd_cno == 0) {
 		/*

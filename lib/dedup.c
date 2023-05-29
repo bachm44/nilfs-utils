@@ -683,7 +683,7 @@ static bool block_extract_vdesc_success(const struct nilfs_file *file,
 		vdesc->vd_vblocknr = le64_to_cpu(binfo->bi_v.bi_vblocknr);
 		vdesc->vd_offset = le64_to_cpu(binfo->bi_v.bi_blkoff);
 		vdesc->vd_flags = 0; /* data */
-		vdesc->vd_pad = 0;
+		vdesc->vd_is_deletable = 1;
 		return true;
 	}
 
