@@ -21,8 +21,8 @@ nilfs-tune -i 1 $LOOP_INTERFACE
 mkdir -p $MNT_DIR
 mount -t nilfs2 $LOOP_INTERFACE $MNT_DIR
 
-gen_file --size=1G --type=0 --seed=420 $MNT_DIR/f1
-gen_file --size=1G --type=0 --seed=420 $MNT_DIR/f2
+genfile --size=100M --type=0 --seed=420 $MNT_DIR/f1
+genfile --size=100M --type=0 --seed=420 $MNT_DIR/f2
 
 umount $LOOP_INTERFACE || true
 losetup -d $LOOP_INTERFACE || true

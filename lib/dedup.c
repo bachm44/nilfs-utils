@@ -986,6 +986,13 @@ static void deduplicate_payloads(const struct nilfs *nilfs,
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 	logger(LOG_INFO, "deduplicating %d payloads",
 	       nilfs_vector_get_size(payloads));
+	logger(LOG_INFO, "expected storage savings: %lld bytes",
+	       nilfs_vector_get_size(payloads) * blocksize);
+
+	if (dedup_options->dry_run) {
+		logger(LOG_INFO, "end of dry run, exiting");
+		return;
+	}
 
 	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
 		if (i % 100 == 0)

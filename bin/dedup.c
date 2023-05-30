@@ -7,10 +7,20 @@
 #include <unistd.h>
 
 static const char *restrict progname = "dedup";
+#define DEDUP_USAGE                                                                          \
+	"Usage: %s [-hVn] [-v] device\n"                                                     \
+	"dedup -- A program for block-level deduplication for the Nilfs2 filesystem\n"       \
+	"\n"                                                                                 \
+	" -h		Show help and exit\n"                                                          \
+	" -V		Print program version and exit\n"                                              \
+	" -v		Verbose output (LOG_INFO and down)\n"                                          \
+	" -vv		Verbose output (LOG_DEBUG and down)\n"                                        \
+	" -n		Dry run - gather all blocks from segments but without submit to dedup ioctl\n" \
+	"\n"
 
 static void usage()
 {
-	fprintf(stderr, "Usage: %s [-hV] [-v] device\n", progname);
+	fprintf(stderr, DEDUP_USAGE, progname);
 }
 
 static void show_version()
@@ -21,7 +31,7 @@ static void show_version()
 static void parse_options(int argc, char *argv[], struct dedup_options *options)
 {
 	char c;
-	while ((c = getopt(argc, argv, "hV:v")) != EOF) {
+	while ((c = getopt(argc, argv, "hVnv")) != EOF) {
 		switch (c) {
 		case 'h':
 			usage();
@@ -32,6 +42,9 @@ static void parse_options(int argc, char *argv[], struct dedup_options *options)
 		case 'v':
 			options->verbose++;
 			continue;
+		case 'n':
+			options->dry_run = true;
+			continue;
 		default:
 			usage();
 			exit(EXIT_FAILURE);
@@ -41,7 +54,7 @@ static void parse_options(int argc, char *argv[], struct dedup_options *options)
 
 int main(int argc, char *argv[])
 {
-	struct dedup_options options = { .verbose = 0 };
+	struct dedup_options options = { .verbose = 0, .dry_run = false };
 	parse_options(argc, argv, &options);
 	const char *restrict device = argv[optind];
 
