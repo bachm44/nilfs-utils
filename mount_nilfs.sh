@@ -5,7 +5,7 @@ set -x # logging
 IFS=$'\n\t'
 
 MNT_DIR=/mnt/nilfs2
-FS_FILE_SIZE=3G
+FS_FILE_SIZE=1G
 FS_BIN_FILE=nilfs2.bin
 LOOP_INTERFACE=/dev/loop6
 
@@ -21,8 +21,8 @@ nilfs-tune -i 1 $LOOP_INTERFACE
 mkdir -p $MNT_DIR
 mount -t nilfs2 $LOOP_INTERFACE $MNT_DIR
 
-genfile --size=100M --type=0 --seed=420 $MNT_DIR/f1
-genfile --size=100M --type=0 --seed=420 $MNT_DIR/f2
+genfile --size=64M --type=0 --seed=420 $MNT_DIR/f1
+genfile --size=64M --type=0 --seed=420 $MNT_DIR/f2
 
 umount $LOOP_INTERFACE || true
 losetup -d $LOOP_INTERFACE || true

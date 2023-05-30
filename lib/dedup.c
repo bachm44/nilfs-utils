@@ -11,13 +11,20 @@
 
 #include <ftw.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <linux/fs.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/syslog.h>
+
+// TODO move this var to configure.ac
+// Temporary walkaround for large file functions
+#define __USE_LARGEFILE64
 #include <unistd.h>
+
+#define __USE_LARGEFILE64
+#include <fcntl.h>
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdarg.h>
@@ -158,31 +165,23 @@ static void fetch_disk_buffer(off_t sector_start_blocknr)
 {
 	logger(LOG_DEBUG, "initializing buffer with start blocknr %d",
 	       sector_start_blocknr);
-	const int fd = open(device, O_RDWR);
+	const int fd = open64(device, O_RDWR);
 	if (unlikely(fd < 0)) {
 		logger(LOG_ERR, "cannot fetch disk buffer: %s",
 		       strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 
-	const int current_offset =
-		lseek(fd, sector_start_blocknr * blocksize, SEEK_SET);
-
-	if (current_offset < 0) {
-		logger(LOG_ERR, "cannot lseek sector: %s", strerror(errno));
-	}
+	const off64_t disk_sector = sector_start_blocknr * blocksize;
 
 	for (size_t i = 0; i < disk_buffer_size; ++i) {
-		if (read(fd, map_disk_buffer(i, 0), blocksize) < 0) {
+		if (pread64(fd, map_disk_buffer(i, 0), blocksize, disk_sector) <
+		    0) {
 			logger(LOG_ERR,
 			       "cannot map disk buffer for fd = %d, blocksize = %lld: %s",
 			       fd, blocksize, strerror(errno));
 			exit(EXIT_FAILURE);
 		}
-	}
-
-	if ((lseek(fd, 0, SEEK_SET)) < 0) {
-		logger(LOG_ERR, "cannot lseek: %s", strerror(errno));
 	}
 
 	if ((close(fd)) < 0) {
@@ -868,8 +867,10 @@ static struct hashtable *populate_hashtable(const struct nilfs *nilfs)
 
 	for (__u64 segment_number = 0; segment_number < nsegments;
 	     ++segment_number) {
-		logger(LOG_INFO, "populating hashtable with segment %d of %d",
-		       segment_number, nsegments);
+		if (segment_number % 100 == 0)
+			logger(LOG_INFO,
+			       "populating hashtable with segment %d of %d",
+			       segment_number, nsegments);
 
 		const int ret = populate_hashtable_with_segment(
 			nilfs, segment_number, &table);
