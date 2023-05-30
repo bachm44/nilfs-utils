@@ -173,15 +173,25 @@ static void fetch_disk_buffer(off_t sector_start_blocknr)
 	}
 
 	const off64_t disk_sector = sector_start_blocknr * blocksize;
+	const off64_t current_offset = lseek64(fd, disk_sector, SEEK_SET);
+
+	if (current_offset < 0) {
+		logger(LOG_ERR, "cannot lseek sector %lld: %s", disk_sector,
+		       strerror(errno));
+	}
 
 	for (size_t i = 0; i < disk_buffer_size; ++i) {
-		if (pread64(fd, map_disk_buffer(i, 0), blocksize, disk_sector) <
-		    0) {
+		if (read(fd, map_disk_buffer(i, 0), blocksize) < 0) {
 			logger(LOG_ERR,
 			       "cannot map disk buffer for fd = %d, blocksize = %lld: %s",
 			       fd, blocksize, strerror(errno));
 			exit(EXIT_FAILURE);
 		}
+	}
+
+	if ((lseek64(fd, 0, SEEK_SET)) < 0) {
+		logger(LOG_ERR, "cannot lseek onto first sector: %s",
+		       strerror(errno));
 	}
 
 	if ((close(fd)) < 0) {
