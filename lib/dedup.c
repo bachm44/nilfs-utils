@@ -830,7 +830,7 @@ static int populate_hashtable_with_segment(const struct nilfs *nilfs,
 	}
 
 	if (si.sui_nblocks == 0) {
-		logger(LOG_WARNING, "segment %d is empty", segment_number);
+		logger(LOG_INFO, "segment %d is empty", segment_number);
 		return EXIT_FAILURE;
 	}
 
