@@ -860,7 +860,7 @@ static __u64 get_dirty_segments(const struct nilfs *nilfs)
 {
 	struct nilfs_sustat sustat;
 	nilfs_get_sustat(nilfs, &sustat);
-	return sustat.ss_ndirtysegs;
+	return sustat.ss_nsegs;
 }
 
 static struct hashtable *populate_hashtable(const struct nilfs *nilfs)
