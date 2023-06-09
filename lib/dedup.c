@@ -260,32 +260,31 @@ static struct nilfs *nilfs_open_safe(const char *restrict device)
 
 static void print_nilfs_suinfo(const struct nilfs_suinfo *si)
 {
-	logger(LOG_INFO, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 
-	logger(LOG_INFO, "nilfs_suinfo {");
-	logger(LOG_INFO, "	nblocks = %d", si->sui_nblocks);
-	logger(LOG_INFO, "	lastmod = %lld", si->sui_lastmod);
-	logger(LOG_INFO, "	flags = %lld", si->sui_flags);
-	logger(LOG_INFO, "}");
+	logger(LOG_DEBUG, "nilfs_suinfo {");
+	logger(LOG_DEBUG, "	nblocks = %d", si->sui_nblocks);
+	logger(LOG_DEBUG, "	lastmod = %lld", si->sui_lastmod);
+	logger(LOG_DEBUG, "}");
 }
 
 static void print_nilfs_segment(const struct nilfs_segment *segment)
 {
-	logger(LOG_INFO, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 
-	logger(LOG_INFO, "nilfs_segment {");
-	logger(LOG_INFO, "	addr = %p,", segment->addr);
-	logger(LOG_INFO, "	segsize = %ld,", segment->segsize);
-	logger(LOG_INFO, "	seqnum = %ld,", segment->seqnum);
-	logger(LOG_INFO, "	blocknr = %ld,", segment->blocknr);
-	logger(LOG_INFO, "	nblocks = %d,", segment->nblocks);
-	logger(LOG_INFO, "	blocks_per_segment = %d,",
+	logger(LOG_DEBUG, "nilfs_segment {");
+	logger(LOG_DEBUG, "	addr = %p,", segment->addr);
+	logger(LOG_DEBUG, "	segsize = %ld,", segment->segsize);
+	logger(LOG_DEBUG, "	seqnum = %ld,", segment->seqnum);
+	logger(LOG_DEBUG, "	blocknr = %ld,", segment->blocknr);
+	logger(LOG_DEBUG, "	nblocks = %d,", segment->nblocks);
+	logger(LOG_DEBUG, "	blocks_per_segment = %d,",
 	       segment->blocks_per_segment);
-	logger(LOG_INFO, "	blkbits = %d,", segment->blkbits);
-	logger(LOG_INFO, "	seed = %d,", segment->seed);
-	logger(LOG_INFO, "	mmaped = %d,", segment->mmapped);
-	logger(LOG_INFO, "	adjusted = %d,", segment->adjusted);
-	logger(LOG_INFO, "}");
+	logger(LOG_DEBUG, "	blkbits = %d,", segment->blkbits);
+	logger(LOG_DEBUG, "	seed = %d,", segment->seed);
+	logger(LOG_DEBUG, "	mmaped = %d,", segment->mmapped);
+	logger(LOG_DEBUG, "	adjusted = %d,", segment->adjusted);
+	logger(LOG_DEBUG, "}");
 }
 
 static void print_nilfs_layout(const struct nilfs *nilfs)
