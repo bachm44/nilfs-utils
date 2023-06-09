@@ -720,7 +720,8 @@ int nilfs_xreclaim_segment(struct nilfs *nilfs,
 		goto out_lock;
 
 	nblocks = nilfs_vector_get_size(vdescv);
-	protcno = NILFS_CNO_MAX;
+	protcno = (params->flags & NILFS_RECLAIM_PARAM_PROTCNO) ?
+		params->protcno : NILFS_CNO_MAX;
 
 	ret = nilfs_toss_vdescs(nilfs, vdescv, periodv, vblocknrv, protcno);
 	if (unlikely(ret < 0))
