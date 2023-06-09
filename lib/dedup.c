@@ -860,7 +860,7 @@ static __u64 get_dirty_segments(const struct nilfs *nilfs)
 {
 	struct nilfs_sustat sustat;
 	nilfs_get_sustat(nilfs, &sustat);
-	return sustat.ss_ndirtysegs;
+	return sustat.ss_nsegs;
 }
 
 static struct hashtable *populate_hashtable(const struct nilfs *nilfs)
@@ -886,8 +886,7 @@ static struct hashtable *populate_hashtable(const struct nilfs *nilfs)
 			nilfs, segment_number, &table);
 
 		if (ret) {
-			logger(LOG_WARNING,
-			       "failed to read segment %d, skipping",
+			logger(LOG_DEBUG, "failed to read segment %d, skipping",
 			       segment_number);
 			continue;
 		}
@@ -1113,6 +1112,8 @@ static void deduplicate(const struct nilfs *restrict nilfs)
 	struct nilfs_vector *deduplication_payloads = NULL;
 
 	while (true) {
+		init_disk_buffer();
+		fetch_disk_buffer(0);
 		crc_table = populate_hashtable(nilfs);
 		deduplication_payloads = obtain_payloads(crc_table);
 
@@ -1124,6 +1125,7 @@ static void deduplicate(const struct nilfs *restrict nilfs)
 		       "couldn't obtain deduplication payloads, waiting ...");
 		free_payloads(deduplication_payloads);
 		hashtable_free(crc_table);
+		destroy_disk_buffer();
 		sleep(1);
 	}
 
@@ -1141,9 +1143,6 @@ int run(const char *dev, const struct dedup_options *options)
 	dedup_options = options;
 
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
-
-	init_disk_buffer();
-	fetch_disk_buffer(0);
 
 	struct nilfs *fs = nilfs_open_safe(device);
 	nilfs_opt_set_mmap(fs);
