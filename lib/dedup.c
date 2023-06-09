@@ -142,6 +142,7 @@ static void init_disk_buffer(void)
 {
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 	disk_buffer = calloc(disk_buffer_size, sizeof(void *));
+	disk_buffer_block_sector = 0;
 	if (!disk_buffer)
 		perr_cannot_allocate_memory();
 
