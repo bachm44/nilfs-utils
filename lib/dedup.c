@@ -1052,10 +1052,6 @@ static void deduplicate_payloads(const struct nilfs *nilfs,
 
 	logger(LOG_INFO, "sending %ld deduplication payloads", payload_count);
 
-	for (size_t i = 0; i < payload_count; ++i) {
-		print_deduplication_block(&payload[i]);
-	}
-
 	if (nilfs_dedup(nilfs, payload, payload_count) < 0) {
 		logger(LOG_ERR, "cannot call ioctl: %s", strerror(errno));
 	}
