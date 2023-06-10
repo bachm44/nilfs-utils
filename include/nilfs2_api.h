@@ -260,17 +260,18 @@ struct nilfs_bdesc {
 	__u32 bd_pad;
 };
 
-#define NILFS_DEDUPLICATION_BLOCK_ERR 0
-#define NILFS_DEDUPLICATION_BLOCK_SRC 1
-#define NILFS_DEDUPLICATION_BLOCK_DST 2
-
 struct nilfs_deduplication_block {
 	__u64 ino;
 	__u64 cno;
 	__u64 vblocknr;
 	__u64 blocknr;
 	__u64 offset;
-	__u64 flags;
+};
+
+struct nilfs_deduplication_payload {
+	struct nilfs_deduplication_block src;
+	__u64 dst_count;
+	struct nilfs_deduplication_block *dst;
 };
 
 #define NILFS_IOCTL_IDENT	'n'

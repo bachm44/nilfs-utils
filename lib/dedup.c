@@ -903,11 +903,7 @@ static bool bucket_has_multiple_items(const struct bucket *bucket)
 	return bucket->count > 1;
 }
 
-struct nilfs_deduplication_payload {
-	struct nilfs_deduplication_block src;
-	__u64 dst_count;
-	struct nilfs_deduplication_block *dst;
-};
+typedef struct nilfs_deduplication_payload deduplication_payload_t;
 
 static void
 fill_deduplication_payload(struct nilfs_deduplication_block *payload,
@@ -918,7 +914,6 @@ fill_deduplication_payload(struct nilfs_deduplication_block *payload,
 	payload->vblocknr = info->vd_vblocknr;
 	payload->blocknr = info->vd_blocknr;
 	payload->offset = info->vd_offset;
-	payload->flags = NILFS_DEDUPLICATION_BLOCK_ERR;
 }
 
 static const struct nilfs_vector *blocks_for_bucket(const struct bucket *bucket)
@@ -941,9 +936,8 @@ static const struct nilfs_vector *blocks_for_bucket(const struct bucket *bucket)
 	return blocks;
 }
 
-static bool
-deduplication_payload_for_bucket(const struct bucket *bucket,
-				 struct nilfs_deduplication_payload **out)
+bool deduplication_payload_for_bucket(const struct bucket *bucket,
+				      deduplication_payload_t **out)
 {
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 
@@ -959,10 +953,8 @@ deduplication_payload_for_bucket(const struct bucket *bucket,
 		return false;
 	}
 
-	struct nilfs_deduplication_block *src =
+	const struct nilfs_deduplication_block *src =
 		nilfs_vector_get_element(blocks, 0);
-
-	src->flags = NILFS_DEDUPLICATION_BLOCK_SRC;
 
 	(*out)->src = *src;
 	(*out)->dst_count = blocks_count - 1;
@@ -970,9 +962,8 @@ deduplication_payload_for_bucket(const struct bucket *bucket,
 			     (*out)->dst_count);
 
 	for (size_t i = 0; i < (*out)->dst_count; ++i) {
-		struct nilfs_deduplication_block *dst =
+		const struct nilfs_deduplication_block *dst =
 			nilfs_vector_get_element(blocks, i + 1);
-		dst->flags = NILFS_DEDUPLICATION_BLOCK_DST;
 		(*out)->dst[i] = *dst;
 	}
 
@@ -981,59 +972,22 @@ deduplication_payload_for_bucket(const struct bucket *bucket,
 	return true;
 }
 
-static size_t
-deduplication_payload_count(const struct nilfs_deduplication_payload *payload)
+static struct nilfs_deduplication_block *
+convert_payload(const deduplication_payload_t *payload)
 {
-	return 1 + payload->dst_count;
-}
+	const size_t count = payload->dst_count + 1;
+	assert(count >= 2);
 
-static size_t convert_payload_count(const struct nilfs_vector *payloads)
-{
-	size_t result = 0;
+	struct nilfs_deduplication_block *blocks =
+		malloc(sizeof(struct nilfs_deduplication_block) * count);
 
-	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
-		const struct nilfs_deduplication_payload *payload =
-			nilfs_vector_get_element(payloads, i);
-		result += deduplication_payload_count(payload);
+	blocks[0] = payload->src;
+
+	for (size_t i = 1; i < count; ++i) {
+		blocks[i] = payload->dst[i - 1];
 	}
 
-	return result;
-}
-
-static void convert_payload(const struct nilfs_vector *payloads,
-			    struct nilfs_deduplication_block **out,
-			    size_t *out_count)
-{
-	*out_count = convert_payload_count(payloads);
-	*out = calloc(*out_count, sizeof(**out));
-
-	size_t count_index = 0;
-	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
-		const struct nilfs_deduplication_payload *payload =
-			nilfs_vector_get_element(payloads, i);
-
-		assert(payload->src.flags == NILFS_DEDUPLICATION_BLOCK_SRC);
-		(*out)[count_index] = payload->src;
-		for (size_t j = 0; j < payload->dst_count; ++j) {
-			assert(payload->dst[j].flags ==
-			       NILFS_DEDUPLICATION_BLOCK_DST);
-			(*out)[count_index++] = payload->dst[j];
-		}
-	}
-}
-
-static void free_payload(struct nilfs_deduplication_block *payload,
-			 size_t count)
-{
-	// while (count > 0) {
-	// 	struct nilfs_deduplication_block *current = &payload[count - 1];
-	// 	if (current) {
-	// 		free(current);
-	// 	}
-
-	// 	count--;
-	// }
-	free(payload);
+	return blocks;
 }
 
 static void deduplicate_payloads(const struct nilfs *nilfs,
@@ -1050,17 +1004,23 @@ static void deduplicate_payloads(const struct nilfs *nilfs,
 		return;
 	}
 
-	struct nilfs_deduplication_block *payload = NULL;
-	size_t payload_count = 0;
-	convert_payload(payloads, &payload, &payload_count);
+	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
+		if (i % 100 == 0)
+			logger(LOG_INFO, "Deduplicating payload %d of %d", i,
+			       nilfs_vector_get_size(payloads));
 
-	logger(LOG_INFO, "sending %ld deduplication payloads", payload_count);
+		const deduplication_payload_t *payload =
+			nilfs_vector_get_element(payloads, i);
 
-	if (nilfs_dedup(nilfs, payload, payload_count) < 0) {
-		logger(LOG_ERR, "cannot call ioctl: %s", strerror(errno));
+		struct nilfs_deduplication_block *converted_payload =
+			convert_payload(payload);
+		if (nilfs_dedup(nilfs, converted_payload,
+				payload->dst_count + 1) < 0) {
+			logger(LOG_ERR, "cannot call ioctl: %s",
+			       strerror(errno));
+		}
+		free(converted_payload);
 	}
-
-	free_payload(payload, payload_count);
 }
 
 static void free_payloads(struct nilfs_vector *payloads)
@@ -1068,7 +1028,7 @@ static void free_payloads(struct nilfs_vector *payloads)
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 
 	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
-		const struct nilfs_deduplication_payload *payload =
+		const deduplication_payload_t *payload =
 			nilfs_vector_get_element(payloads, i);
 		free(payload->dst);
 	}
@@ -1081,13 +1041,13 @@ static struct nilfs_vector *obtain_payloads(const struct hashtable *table)
 	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
 
 	struct nilfs_vector *payloads =
-		nilfs_vector_create(sizeof(struct nilfs_deduplication_payload));
+		nilfs_vector_create(sizeof(deduplication_payload_t));
 
 	for (size_t i = 0; i < table->size; ++i) {
 		const struct bucket *bucket = table->items[i];
 
 		if (bucket && bucket_has_multiple_items(bucket)) {
-			struct nilfs_deduplication_payload *payload =
+			deduplication_payload_t *payload =
 				nilfs_vector_get_new_element(payloads);
 
 			if (!deduplication_payload_for_bucket(bucket,
@@ -1123,7 +1083,7 @@ static void print_deduplication_payloads(const struct nilfs_vector *payloads)
 	for (size_t i = 0; i < nilfs_vector_get_size(payloads); ++i) {
 		logger(LOG_DEBUG,
 		       "	struct nilfs_deduplication_payload {");
-		const struct nilfs_deduplication_payload *payload =
+		const deduplication_payload_t *payload =
 			nilfs_vector_get_element(payloads, i);
 		logger(LOG_DEBUG, "		src = {");
 		print_deduplication_block(&payload->src);
