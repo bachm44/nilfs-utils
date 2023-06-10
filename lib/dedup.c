@@ -1022,16 +1022,6 @@ static void convert_payload(const struct nilfs_vector *payloads,
 	}
 }
 
-static void
-print_deduplication_block(const struct nilfs_deduplication_block *block)
-{
-	logger(LOG_INFO, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
-	logger(LOG_INFO,
-	       "				nilfs_deduplication_block = { ino = %ld, cno = %ld, vblocknr = %ld, blocknr = %ld, offset = %ld, flags = %ld}",
-	       block->ino, block->cno, block->vblocknr, block->blocknr,
-	       block->offset, block->flags);
-}
-
 static void deduplicate_payloads(const struct nilfs *nilfs,
 				 const struct nilfs_vector *payloads)
 {
@@ -1099,6 +1089,16 @@ static struct nilfs_vector *obtain_payloads(const struct hashtable *table)
 	}
 
 	return payloads;
+}
+
+static void
+print_deduplication_block(const struct nilfs_deduplication_block *block)
+{
+	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+	logger(LOG_DEBUG,
+	       "				nilfs_deduplication_block = { ino = %ld, cno = %ld, vblocknr = %ld, blocknr = %ld, offset = %ld, flags = %ld}",
+	       block->ino, block->cno, block->vblocknr, block->blocknr,
+	       block->offset, block->flags);
 }
 
 static void print_deduplication_payloads(const struct nilfs_vector *payloads)
