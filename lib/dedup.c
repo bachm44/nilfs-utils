@@ -1013,7 +1013,7 @@ static void convert_payload(const struct nilfs_vector *payloads,
 			nilfs_vector_get_element(payloads, i);
 
 		assert(payload->src.flags == NILFS_DEDUPLICATION_BLOCK_SRC);
-		(*out)[count_index] = payload->src;
+		(*out)[count_index++] = payload->src;
 		for (size_t j = 0; j < payload->dst_count; ++j) {
 			assert(payload->dst[j].flags ==
 			       NILFS_DEDUPLICATION_BLOCK_DST);
@@ -1022,18 +1022,14 @@ static void convert_payload(const struct nilfs_vector *payloads,
 	}
 }
 
-static void free_payload(struct nilfs_deduplication_block *payload,
-			 size_t count)
+static void
+print_deduplication_block(const struct nilfs_deduplication_block *block)
 {
-	// while (count > 0) {
-	// 	struct nilfs_deduplication_block *current = &payload[count - 1];
-	// 	if (current) {
-	// 		free(current);
-	// 	}
-
-	// 	count--;
-	// }
-	free(payload);
+	logger(LOG_INFO, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
+	logger(LOG_INFO,
+	       "				nilfs_deduplication_block = { ino = %ld, cno = %ld, vblocknr = %ld, blocknr = %ld, offset = %ld, flags = %ld}",
+	       block->ino, block->cno, block->vblocknr, block->blocknr,
+	       block->offset, block->flags);
 }
 
 static void deduplicate_payloads(const struct nilfs *nilfs,
@@ -1056,11 +1052,15 @@ static void deduplicate_payloads(const struct nilfs *nilfs,
 
 	logger(LOG_INFO, "sending %ld deduplication payloads", payload_count);
 
+	for (size_t i = 0; i < payload_count; ++i) {
+		print_deduplication_block(&payload[i]);
+	}
+
 	if (nilfs_dedup(nilfs, payload, payload_count) < 0) {
 		logger(LOG_ERR, "cannot call ioctl: %s", strerror(errno));
 	}
 
-	free_payload(payload, payload_count);
+	free(payload);
 }
 
 static void free_payloads(struct nilfs_vector *payloads)
@@ -1103,15 +1103,6 @@ static struct nilfs_vector *obtain_payloads(const struct hashtable *table)
 	}
 
 	return payloads;
-}
-
-static void
-print_deduplication_block(const struct nilfs_deduplication_block *block)
-{
-	logger(LOG_DEBUG, "%s:%d:%s", __FILE__, __LINE__, __FUNCTION__);
-	logger(LOG_DEBUG,
-	       "				nilfs_deduplication_block = { ino = %ld, blocknr = %ld }",
-	       block->ino, block->blocknr);
 }
 
 static void print_deduplication_payloads(const struct nilfs_vector *payloads)
