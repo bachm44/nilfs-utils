@@ -984,7 +984,7 @@ deduplication_payload_for_bucket(const struct bucket *bucket,
 static size_t
 deduplication_payload_count(const struct nilfs_deduplication_payload *payload)
 {
-	return 1 + payload->dst_count;
+	return 1 + 1; // TODO support multiple block dedup
 }
 
 static size_t convert_payload_count(const struct nilfs_vector *payloads)
@@ -1018,6 +1018,7 @@ static void convert_payload(const struct nilfs_vector *payloads,
 			assert(payload->dst[j].flags ==
 			       NILFS_DEDUPLICATION_BLOCK_DST);
 			(*out)[count_index++] = payload->dst[j];
+			break; // TODO support multiple destination block dedup
 		}
 	}
 }
