@@ -513,9 +513,9 @@ static int nilfs_toss_vdescs(struct nilfs *nilfs,
 		for (j = i; j < nilfs_vector_get_size(vdescv); j++) {
 			vdesc = nilfs_vector_get_element(vdescv, j);
 			assert(vdesc != NULL);
-			// if (nilfs_vdesc_is_live(vdesc, protcno, ss, n,
-			// 			&last_hit))
-			// 	break;
+			if (nilfs_vdesc_is_live(vdesc, protcno, ss, n,
+						&last_hit))
+				break;
 
 			/*
 			 * Add the virtual block number to the candidate
@@ -630,8 +630,8 @@ static int nilfs_toss_bdescs(struct nilfs_vector *bdescv)
 		for (j = i; j < nilfs_vector_get_size(bdescv); j++) {
 			bdesc = nilfs_vector_get_element(bdescv, j);
 			assert(bdesc != NULL);
-			// if (nilfs_bdesc_is_live(bdesc))
-			// 	break;
+			if (nilfs_bdesc_is_live(bdesc))
+				break;
 		}
 		if (j > i)
 			nilfs_vector_delete_elements(bdescv, i, j - i);
