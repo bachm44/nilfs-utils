@@ -915,6 +915,7 @@ static void nilfs_cleanerd_manual_end(struct nilfs_cleanerd *cleanerd)
 	cleanerd->running = 0;
 	cleanerd->timeout = cleanerd->config.cf_clean_check_interval;
 	syslog(LOG_INFO, "manual run completed");
+	exit(0);
 }
 
 static void nilfs_cleanerd_manual_stop(struct nilfs_cleanerd *cleanerd)
@@ -1654,7 +1655,7 @@ static int nilfs_cleanerd_clean_loop(struct nilfs_cleanerd *cleanerd)
 		}
 
 		if (nilfs_cleanerd_check_state(cleanerd, &sustat))
-			return 0;
+			goto sleep;
 
 		/* starts garbage collection */
 		syslog(LOG_INFO, "ncleansegs = %llu",
