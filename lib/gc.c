@@ -7,6 +7,8 @@
  *
  * Copyright (C) 2008-2012 Nippon Telegraph and Telephone Corporation.
  */
+#include "nilfs.h"
+#include <sys/syslog.h>
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif	/* HAVE_CONFIG_H */
@@ -611,6 +613,11 @@ static int nilfs_get_bdesc(struct nilfs *nilfs, struct nilfs_vector *bdescv)
  */
 static int nilfs_bdesc_is_live(struct nilfs_bdesc *bdesc)
 {
+	if (bdesc->bd_oblocknr == bdesc->bd_blocknr) {
+		nilfs_gc_logger(LOG_WARNING, "bdesc is live: oblocknr = %ld, blocknr = %ld", bdesc->bd_oblocknr, bdesc->bd_blocknr);
+	} else {
+		nilfs_gc_logger(LOG_WARNING, "bdesc is dead: oblocknr = %ld, blocknr = %ld", bdesc->bd_oblocknr, bdesc->bd_blocknr);
+	}
 	return bdesc->bd_oblocknr == bdesc->bd_blocknr;
 }
 
@@ -720,8 +727,7 @@ int nilfs_xreclaim_segment(struct nilfs *nilfs,
 		goto out_lock;
 
 	nblocks = nilfs_vector_get_size(vdescv);
-	protcno = (params->flags & NILFS_RECLAIM_PARAM_PROTCNO) ?
-		params->protcno : NILFS_CNO_MAX;
+	protcno = NILFS_CNO_MAX;
 
 	ret = nilfs_toss_vdescs(nilfs, vdescv, periodv, vblocknrv, protcno);
 	if (unlikely(ret < 0))
@@ -750,6 +756,7 @@ int nilfs_xreclaim_segment(struct nilfs *nilfs,
 			(nilfs_vector_get_size(vdescv) +
 			nilfs_vector_get_size(bdescv));
 
+	nilfs_gc_logger(LOG_WARNING, "GC reclaimable blocks: total_blocks = %ld, vblocks = %ld, blocks = %ld", nilfs_get_blocks_per_segment(nilfs) * n, nilfs_vector_get_size(vdescv), nilfs_vector_get_size(bdescv));
 	if (stat) {
 		stat->live_pblks = nilfs_vector_get_size(bdescv);
 		stat->defunct_pblks = nblocks - stat->live_pblks;
@@ -778,7 +785,6 @@ int nilfs_xreclaim_segment(struct nilfs *nilfs,
 	if ((params->flags & NILFS_RECLAIM_PARAM_MIN_RECLAIMABLE_BLKS) &&
 			nilfs_opt_test_set_suinfo(nilfs) &&
 			reclaimable_blocks < params->min_reclaimable_blks * n) {
-		nilfs_gc_logger(LOG_INFO, "RECLAIM_PARAM: min_reclaimable_blks * n = %d, reclaimable_blocks = %d", params->min_reclaimable_blks * n, reclaimable_blocks);
 		if (stat) {
 			stat->deferred_segs = n;
 			stat->cleaned_segs = 0;
